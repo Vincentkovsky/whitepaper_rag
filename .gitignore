@@ -1,0 +1,42 @@
+# Python artifacts
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.coverage
+coverage.xml
+
+# Virtual environments
+venv/
+env/
+.venv/
+.env/
+backend/venv/
+
+# IDE / Editor
+.idea/
+.vscode/
+*.code-workspace
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Build outputs
+dist/
+build/
+
+# Uploaded files & temp storage
+backend/app/storage/uploads/
+backend/chunks/
+
+# Local config
+.env.local
+.env.*.local
+
+

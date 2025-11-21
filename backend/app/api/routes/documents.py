@@ -5,30 +5,17 @@ from fastapi import status
 from pydantic import BaseModel, HttpUrl
 
 from ...core.config import UserContext, get_settings
-from ...core.supabase_client import get_supabase_client
 from ...core.security import get_current_user
 from ...models.document import Document
-from ...repositories.document_repository import (
-    DocumentRepository,
-    LocalDocumentRepository,
-    SupabaseDocumentRepository,
-)
+from ...repositories.document_repository import DocumentRepository, create_document_repository
 from ...services.document_service import DocumentService
 
 router = APIRouter(prefix="/api/documents", tags=["documents"])
 
 
-def get_document_repository(settings) -> DocumentRepository:
-    if settings.supabase_url and settings.supabase_anon_key:
-        client = get_supabase_client()
-        return SupabaseDocumentRepository(client)
-    store_path = settings.storage_base_path.parent / "documents.json"
-    return LocalDocumentRepository(store_path=store_path)
-
-
 def get_document_service() -> DocumentService:
     settings = get_settings()
-    repo = get_document_repository(settings)
+    repo = create_document_repository(settings)
     return DocumentService(repo=repo, settings=settings)
 
 

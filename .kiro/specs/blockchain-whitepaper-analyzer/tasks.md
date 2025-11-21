@@ -46,24 +46,24 @@
 
 ## 3. 分析报告 LangGraph
 
-- [ ] **analysis-planner**
-  - [ ] `make_generate_sub_queries(openai_client)` 生成 3-5 子问题，JSON 解析校验。
-  - [ ] 将维度列表写入状态 `sub_queries`。
-- [ ] **analysis-retriever**
-  - [ ] `make_retrieve_all_contexts(rag_service)` 批量获取 chunk、去重、拼 context。
-  - [ ] 确保合并文本时保持 section_path 标记。
-- [ ] **analysis-analyzers**
-  - [ ] `make_analyze_dimension` 共享 `openai_client`，根据维度提示输出 Markdown 报告+评分。
-  - [ ] 定义 `analyze_tech/econ/team/risk` 包装器，更新 `analysis_results`。
-- [ ] **analysis-synthesizer**
-  - [ ] `make_synthesize_final_report` 在所有维度结果齐备后触发 LLM。
-  - [ ] 输出 JSON（overall_score/strengths/risks/recommendation）并附维度报告。
+- [x] **analysis-planner**
+  - [x] `make_generate_sub_queries(openai_client)` 生成 3-5 子问题，JSON 解析校验。
+  - [x] 将维度列表写入状态 `sub_queries`。
+- [x] **analysis-retriever**
+  - [x] `make_retrieve_all_contexts(rag_service)` 批量获取 chunk、去重、拼 context。
+  - [x] 确保合并文本时保持 section_path 标记。
+- [x] **analysis-analyzers**
+  - [x] `make_analyze_dimension` 共享 `openai_client`，根据维度提示输出 Markdown 报告+评分。
+  - [x] 定义 `analyze_tech/econ/team/risk` 包装器，更新 `analysis_results`。
+- [x] **analysis-synthesizer**
+  - [x] `make_synthesize_final_report` 在所有维度结果齐备后触发 LLM。
+  - [x] 输出 JSON（overall_score/strengths/risks/recommendation）并附维度报告。
 
 ## 4. 异步任务与队列
 
-- [ ] **celery-tasks**
-  - [ ] `parse_document_task`：多阶段 `update_state`（0/30/50/80/100%）。
-  - [ ] `generate_analysis_task(document_id, user_id)`：执行工作流，异常上报。
+- [x] **celery-tasks**
+  - [x] `parse_document_task`：多阶段 `update_state`（0/30/50/80/100%）。
+  - [x] `generate_analysis_task(document_id, user_id)`：执行工作流，异常上报。
 - [ ] **task-priority**
   - [ ] 为付费/免费/批量任务配置不同 Celery 队列与 concurrency。
   - [ ] 失败回滚：调用 `refund_credits`，记录日志并重试策略。

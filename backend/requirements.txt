@@ -13,4 +13,6 @@ supabase==2.24.0
 tiktoken==0.7.0
 beautifulsoup4==4.12.3
 pandas==2.2.3
+pytest==8.3.3
+redis==7.1.0
 

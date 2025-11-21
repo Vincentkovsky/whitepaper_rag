@@ -3,15 +3,15 @@ from __future__ import annotations
 import json
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Dict, List, Optional
-
-from typing import Any
+from typing import Any, Dict, List, Optional
 
 try:
     from supabase import Client
 except ImportError:  # pragma: no cover
     Client = Any  # type: ignore
 
+from ..core.config import Settings
+from ..core.supabase_client import get_supabase_client
 from ..models.document import Document, DocumentSource, DocumentStatus
 
 
@@ -153,4 +153,12 @@ class SupabaseDocumentRepository(DocumentRepository):
             created_at=row.get("created_at") or "",
             updated_at=row.get("updated_at") or "",
         )
+
+
+def create_document_repository(settings: Settings) -> DocumentRepository:
+    if settings.supabase_url and settings.supabase_anon_key:
+        client = get_supabase_client()
+        return SupabaseDocumentRepository(client)
+    store_path = settings.storage_base_path.parent / "documents.json"
+    return LocalDocumentRepository(store_path=store_path)
 

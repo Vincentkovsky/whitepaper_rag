@@ -47,7 +47,7 @@ class Chunk:
     metadata: Dict[str, str]
 
 
-class SemanticChunker:
+class StructuredChunker:
     """Chunking pipeline backed by Unstructured with advanced table/text handling."""
 
     def __init__(

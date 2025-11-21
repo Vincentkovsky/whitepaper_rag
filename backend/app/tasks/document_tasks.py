@@ -15,7 +15,7 @@ from pathlib import Path
 
 from ..core.config import get_settings
 from ..models.document import DocumentStatus, DocumentSource
-from ..repositories.document_repository import DocumentRepository
+from ..repositories.document_repository import LocalDocumentRepository
 from ..services.chunking_service import SemanticChunker
 from ..services.embedding_service import EmbeddingService
 
@@ -32,7 +32,7 @@ celery_app = (
 
 logger = logging.getLogger(__name__)
 
-repo = DocumentRepository(store_path=settings.storage_base_path.parent / "documents.json")
+repo = LocalDocumentRepository(store_path=settings.storage_base_path.parent / "documents.json")
 
 
 @lru_cache(maxsize=1)

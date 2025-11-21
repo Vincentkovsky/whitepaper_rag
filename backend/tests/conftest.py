@@ -1,7 +1,3 @@
-from __future__ import annotations
-
-from __future__ import annotations
-
 import os
 from pathlib import Path
 from typing import Generator
@@ -11,7 +7,7 @@ from fastapi.testclient import TestClient
 
 from backend.app.api.routes import documents
 from backend.app.core.config import get_settings
-from backend.app.repositories.document_repository import DocumentRepository
+from backend.app.repositories.document_repository import LocalDocumentRepository
 from backend.app.services.document_service import DocumentService
 
 
@@ -32,7 +28,7 @@ def client(tmp_path_factory: pytest.TempPathFactory) -> Generator[TestClient, No
     get_settings.cache_clear()
     from backend.app.main import create_app
 
-    repo = DocumentRepository(store_path=uploads_dir / "documents.json")
+    repo = LocalDocumentRepository(store_path=uploads_dir / "documents.json")
     settings = get_settings()
     embedder = StubEmbedder()
     service = DocumentService(repo=repo, settings=settings, embedder=embedder)

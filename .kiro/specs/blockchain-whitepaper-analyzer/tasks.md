@@ -15,13 +15,13 @@
   - [x] 批量调用 OpenAI embeddings（当前使用 `text-embedding-3-small` 占位）。
   - [x] 将 chunk 与 metadata 写入单一 Chroma collection，确保 user_id/document_id 过滤。
   - [x] 实现删除文档时的向量同步删除及 created_at 记录。
-- [ ] **doc-storage-supabase**
-  - [ ] 将 DocumentRepository 切换为 Supabase Postgres + RLS。
+- [x] **doc-storage-supabase**
+  - [x] 将 DocumentRepository 切换为 Supabase Postgres + RLS（无配置时回退本地 JSON）。
   - [ ] 统一管理文档状态、用户订阅、积分等实体。
-- [ ] **doc-chunk-advanced**
-  - [ ] 引入表格专用处理：HTML→Markdown、GPT 摘要、元数据 `element_type=table`。
-  - [ ] 使用 tiktoken 计算 token，基于阈值控制 Recursive splitter。
-  - [ ] 构建标题层级树（H1/H2/H3) + page_number 元数据。
+- [x] **doc-chunk-advanced**
+  - [x] 引入表格专用处理：HTML→Markdown、GPT 摘要（如不可用则降级）、元数据 `element_type=table`。
+  - [x] 使用 tiktoken 计算 token，基于阈值控制分块与 overlap。
+  - [x] 构建标题层级树（H1/H2/H3) + page_number 元数据。
 - [ ] **doc-embed-prod**
   - [ ] 改为 text-embedding-3-large，100 chunk/batch 调用。
   - [ ] 接入托管 Chroma/向量服务，支持多实例与回滚日志。
@@ -32,17 +32,17 @@
   - [x] 设计 `qa:{md5(document_id+question)}` 缓存 key，TTL 1h。
   - [x] 设计 chunk 检索缓存与分析结果缓存层（24h/永久）。
   - [x] 处理缓存命中/未命中的序列化（json.dumps/loads）。
-- [ ] **rag-search-flow**
-  - [ ] 生成问题 embedding，携带 `{user_id, document_id}` metadata 过滤调用 `collection.query`。
-  - [ ] 实现 rerank：按 distance、章节聚合、表格加权，并保持 chunk_index 顺序。
-  - [ ] 构建 context（token 限制 2000）并附带来源标记 `[来源: section_path]`。
-- [ ] **rag-answer-gen**
-  - [ ] 实现 mini/turbo 双模型策略与温度设置。
-  - [ ] 输出 answer + sources（section/page/text snippet）并落 Redis 缓存。
-  - [ ] 缺失上下文时给出兜底回复。
-- [ ] **rag-redis-integration**
-  - [ ] 使用 Redis 替换内存 CacheService，提供 QA/Chunk/Analysis 三层缓存。
-  - [ ] 实现 cache hit/miss metrics 并注入到 RAGService。
+- [x] **rag-search-flow**
+  - [x] 生成问题 embedding，携带 `{user_id, document_id}` metadata 过滤调用 `collection.query`。
+  - [x] 实现 rerank：按 distance、章节聚合、表格加权，并保持 chunk_index 顺序。
+  - [x] 构建 context（token 限制 2000）并附带来源标记 `[来源: section_path]`。
+- [x] **rag-answer-gen**
+  - [x] 实现 mini/turbo 双模型策略与温度设置。
+  - [x] 输出 answer + sources（section/page/text snippet）并落 Redis 缓存。
+  - [x] 缺失上下文时给出兜底回复。
+- [x] **rag-redis-integration**
+  - [x] 使用 Redis 替换内存 CacheService，提供 QA/Chunk/Analysis 三层缓存。
+  - [x] 实现 cache hit/miss metrics 并注入到 RAGService。
 
 ## 3. 分析报告 LangGraph
 

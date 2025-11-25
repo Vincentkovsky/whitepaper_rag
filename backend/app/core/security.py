@@ -5,6 +5,7 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from ..services.subscription_service import get_subscription_service
+from ..logging_utils import bind_user_context
 from .config import UserContext, get_settings, Settings
 
 security_scheme = HTTPBearer(auto_error=False)
@@ -21,9 +22,11 @@ async def get_current_user(
 
     settings = get_settings()
     if settings.supabase_url and settings.supabase_anon_key and _looks_like_jwt(token):
-        return await _resolve_supabase_user(token, settings)
-
-    return _mock_user_context(token)
+        context = await _resolve_supabase_user(token, settings)
+    else:
+        context = _mock_user_context(token)
+    bind_user_context(context.id)
+    return context
 
 
 async def _resolve_supabase_user(token: str, settings: Settings) -> UserContext:

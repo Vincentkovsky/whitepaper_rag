@@ -1,12 +1,31 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
+from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
+
+try:  # pragma: no cover - optional dependency
+    from sentry_sdk import init as sentry_init  # type: ignore[import]
+    from sentry_sdk.integrations.fastapi import FastApiIntegration  # type: ignore[import]
+except ImportError:  # pragma: no cover
+    sentry_init = None
+    FastApiIntegration = None
 
 from .api.routes import auth, documents, subscription, qa
 from .core.config import get_settings
+from .logging_utils import setup_logging
+from .middleware.logging_middleware import RequestLoggingMiddleware
 
 
 def create_app() -> FastAPI:
     settings = get_settings()
+    setup_logging(settings)
+    if settings.sentry_dsn and sentry_init and FastApiIntegration:
+        sentry_init(
+            dsn=settings.sentry_dsn,
+            integrations=[FastApiIntegration()],
+            environment=settings.environment,
+            traces_sample_rate=0.2,
+        )
+
     app = FastAPI(title=settings.app_name)
 
     app.add_middleware(
@@ -16,6 +35,7 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    app.add_middleware(RequestLoggingMiddleware)
 
     app.include_router(auth.router)
     app.include_router(documents.router)
@@ -25,6 +45,10 @@ def create_app() -> FastAPI:
     @app.get("/health")
     async def health():
         return {"status": "ok"}
+
+    @app.get("/metrics")
+    async def metrics():
+        return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
     return app
 

@@ -6,6 +6,16 @@ export interface CurrentUser {
   is_subscriber: boolean
 }
 
+export interface DocumentRecord {
+  id: string
+  source_type: string
+  source_value: string
+  status: string
+  created_at?: string
+  updated_at?: string
+  error_message?: string | null
+}
+
 const AUTH_STORAGE_KEY = 'auth_token'
 
 const api = axios.create({
@@ -68,7 +78,7 @@ export const getDocumentStatus = (documentId: string) => {
 }
 
 export const listDocuments = () => {
-  return api.get('/documents')
+  return api.get<DocumentRecord[]>('/documents')
 }
 
 export const qaQuery = (documentId: string, question: string, model: string = 'mini') => {

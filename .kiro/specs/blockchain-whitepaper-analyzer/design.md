@@ -2124,6 +2124,49 @@ db.query(Document).filter(Document.id == document_id).first()
 
 ## 监控与日志
 
+### 0. 后端日志设计规范
+
+**设计目标**
+- 诊断：快速定位请求/任务失败原因（入参、上下文、依赖调用结果）。
+- 运营：量化文档解析成功率、平均耗时、积分扣费异常等业务指标。
+- 审计：关键信息落盘，满足合规/付费纠纷追溯，同时避免泄露敏感数据。
+
+**日志分层**
+
+| 层级 | 说明 | 关键字段 |
+| --- | --- | --- |
+| HTTP 入口 | FastAPI 中间件记录请求/响应 | request_id、path、status、latency、user_id |
+| 领域事件 | Service/Repository 中的业务日志 | document_id、action、credits_delta、status |
+| 任务日志 | Celery worker 每个阶段 | task_id、stage、progress、duration |
+| 外部依赖 | OpenAI/Gemini/Supabase/Redis/Chroma 调用 | provider、operation、latency、retry_count |
+
+**架构与格式**
+- 使用 `logging.config.dictConfig` 加载统一配置文件（`backend/app/logging.yaml`），按环境切换 Handler：
+  - Dev：彩色 console + 简单格式，级别 DEBUG。
+  - Prod：JSONFormatter（结构化）输出到 stdout + `RotatingFileHandler` (`backend.log`)，级别 INFO。
+- Logger 命名：`app.api`, `app.services.document`, `app.tasks.parse`, 方便按模块过滤。
+- 统一字段：`ts`, `level`, `logger`, `message`, `request_id`, `user_id`, `document_id`, `task_id`, `duration_ms`, `error_code`.
+- 高频日志支持采样（例如成功的健康检查只保留 10%）。
+
+**上下文注入**
+- HTTP：中间件生成 `request_id`（UUID4），从 `Authorization` 解析 `user_id`，放入 `contextvars`; 使用自定义 `ContextFilter` 自动注入每条日志。
+- Celery：任务启动时生成/继承 `task_id`，并写入 `logging.LoggerAdapter`.
+- RAG/文档处理：调用链传递 `document_id`、`sku`、`credits_tx_id`，确保退款/扣费能对应日志。
+
+**输出与保留**
+- 本地开发：`backend.log` 采用 10MB x 5 轮转。
+- 生产建议：stdout → Loki/ELK，保留 14 天；错误级别及关键业务事件额外写入 `logs/events.log`。
+- 采用 `PIIRedactingFilter` 清洗邮箱、token、API key（通过正则/配置项）。
+
+**告警与指标联动**
+- 日志级别 ≥ ERROR 时同时打点 Prometheus Counter `log_errors_total{module=...}`，用于 Alertmanager 告警。
+- 关键业务事件（例如退款、积分不足）以 INFO 级别输出并追加 `event_type` 字段，方便后续查询。
+
+**编码规范**
+- 严禁 `print`，统一 `logger`.
+- `logger.exception` 只用于真正的异常链，普通错误用 `logger.error(..., exc_info=False)`.
+- 在 try/except 中先记录 `error_code`+`reason`，再抛出业务异常，避免重复日志。
+
 ### 1. 错误追踪 (Sentry)
 
 ```python

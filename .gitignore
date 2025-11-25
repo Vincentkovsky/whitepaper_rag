@@ -26,17 +26,18 @@ Thumbs.db
 
 # Logs
 *.log
+backend.log
+backend/logs/
 
 # Build outputs
 dist/
 build/
 
 # Uploaded files & temp storage
-backend/app/storage/uploads/
-backend/chunks/
-backend/app/storage/
+backend/app/storage
 
 # Local config
+.env
 .env.local
 .env.*.local
 

@@ -1,0 +1,53 @@
+version: 1
+disable_existing_loggers: false
+
+formatters:
+  console:
+    format: "%(levelname)s | %(name)s | %(message)s | req=%(request_id)s user=%(user_id)s doc=%(document_id)s task=%(task_id)s"
+  json:
+    class: pythonjsonlogger.jsonlogger.JsonFormatter
+    format: "%(asctime)s %(levelname)s %(name)s %(message)s %(request_id)s %(user_id)s %(document_id)s %(task_id)s %(error_code)s"
+
+filters:
+  context:
+    (): backend.app.logging_utils.ContextFilter
+  pii:
+    (): backend.app.logging_utils.PIIRedactingFilter
+
+handlers:
+  console:
+    class: logging.StreamHandler
+    level: DEBUG
+    formatter: console
+    filters: [context, pii]
+  json:
+    class: logging.StreamHandler
+    level: INFO
+    formatter: json
+    filters: [context, pii]
+  file:
+    class: logging.handlers.RotatingFileHandler
+    level: INFO
+    formatter: json
+    filename: backend.log
+    maxBytes: 10485760
+    backupCount: 5
+    filters: [context, pii]
+  error_metrics:
+    class: backend.app.logging_utils.PrometheusErrorHandler
+    level: ERROR
+
+loggers:
+  app:
+    handlers: [console]
+    level: INFO
+    propagate: false
+  uvicorn.error:
+    handlers: [console]
+    level: INFO
+    propagate: false
+
+root:
+  level: WARNING
+  handlers: [console]
+

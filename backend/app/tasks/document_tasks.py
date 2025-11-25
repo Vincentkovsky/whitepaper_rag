@@ -16,6 +16,7 @@ except ImportError:  # pragma: no cover
     Task = Any  # type: ignore
 
 from ..core.config import get_settings
+from ..logging_utils import bind_document_context, bind_task_context, clear_context
 from ..models.document import DocumentSource, DocumentStatus
 from ..repositories.document_repository import DocumentRepository, create_document_repository
 from ..services.chunking_service import StructuredChunker
@@ -119,6 +120,9 @@ def _parse_document(
     sku: str = DEFAULT_PARSE_SKU,
     task: Optional[Task] = None,
 ) -> None:
+    bind_document_context(document_id)
+    if task is not None:
+        bind_task_context(getattr(getattr(task, "request", None), "id", None))
     repo = get_document_repository()
     _update_task_progress(task, 0, "开始解析")
     logger.info("Starting parse_document_task", extra={"document_id": document_id})
@@ -167,6 +171,8 @@ def _parse_document(
         _check_sla("documents.parse", duration, success=False)
         setattr(exc, "credits_refunded", True)
         raise
+    finally:
+        clear_context()
 
 
 def _extract_elements(source_type: DocumentSource, document, source_url: Optional[str]) -> list[Dict]:
@@ -206,6 +212,7 @@ def _update_task_progress(task: Optional[Task], progress: int, message: str) -> 
 
 
 def _execute_analysis_workflow(document_id: str, user_id: str) -> Dict:
+    bind_document_context(document_id)
     repo = get_document_repository()
     document = repo.get(document_id)
     if not document or document.user_id != user_id:
@@ -257,6 +264,8 @@ def _execute_analysis_workflow(document_id: str, user_id: str) -> Dict:
         record_task_failed("analysis.generate", duration, str(exc))
         _check_sla("analysis.generate", duration, success=False)
         raise
+    finally:
+        clear_context()
 
 
 def _dispatch_task(task_callable, task_name: str, priority: TaskPriority, *args, **kwargs):
@@ -295,6 +304,7 @@ if celery_app:
     ) -> Dict:
         _update_task_progress(self, 0, "开始分析")
         try:
+            bind_task_context(getattr(self.request, "id", None))
             report = _execute_analysis_workflow(document_id, user_id)
             _update_task_progress(self, 100, "分析完成")
             return report

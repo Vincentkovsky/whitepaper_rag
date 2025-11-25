@@ -110,10 +110,22 @@
 - [ ] **security-rls**
   - [ ] Supabase RLS policy（documents/analysis_results/qa_history）。
   - [ ] FastAPI JWT 校验、RateLimiter、API Key 验证。
-- [ ] **monitoring**
-  - [ ] Sentry 集成、结构化日志、Prometheus metrics 中间件。
+- [x] **monitoring**
+  - [x] Sentry 集成（可配置 DSN，默认关闭）。
+  - [x] 统一结构化日志与 `logging.yaml`。
+  - [x] Prometheus `/metrics` 端点、HTTP/任务指标。
 - [ ] **security-hardening**
   - [ ] JWT 校验、RateLimiter、API Key 验证以及日志脱敏。
+- [x] **logging-foundation**
+  - [x] 引入 `logging.yaml` + `dictConfig`，按环境切换 console/JSON/RotatingFileHandler。
+  - [x] 实现 `ContextFilter` + `contextvars` 注入 `request_id/user_id/document_id/task_id`。
+  - [x] 添加 `PIIRedactingFilter` 与采样策略，确保敏感信息脱敏并减少噪音。
+  - [x] 将 `backend.log` 纳入 `.gitignore` 并记录日志保留/归档策略。
+- [x] **logging-instrumentation**
+  - [x] HTTP 中间件记录请求/响应/耗时并暴露 `log_errors_total` 指标。
+  - [x] DocumentService/RAGService/Celery 任务关键路径输出结构化业务事件日志。
+  - [x] 外部依赖（OpenAI/Gemini/Supabase/Chroma）调用封装统一记录 latency/重试/错误码。
+  - [x] ERROR 日志触发 Prometheus Counter + Alertmanager（可由 Prometheus 规则对接）。
 
 ## 9. 成本与风险
 

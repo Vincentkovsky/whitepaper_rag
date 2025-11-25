@@ -3,6 +3,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import type { Session } from '@supabase/supabase-js'
 import DocumentUploader from './components/DocumentUploader.vue'
+import DocumentList from './components/DocumentList.vue'
 import ChatInterface from './components/ChatInterface.vue'
 import AnalysisReport from './components/AnalysisReport.vue'
 import AuthModal from './components/AuthModal.vue'
@@ -19,8 +20,16 @@ const loadingUser = ref(true)
 
 const isAuthenticated = computed(() => !!currentUser.value)
 
+const documentListRef = ref<InstanceType<typeof DocumentList> | null>(null)
+
 const handleDocumentUploaded = (id: string) => {
   currentDocumentId.value = id
+  activeTab.value = 'chat'
+  documentListRef.value?.refreshDocuments?.()
+}
+
+const handleDocumentSelected = (documentId: string) => {
+  currentDocumentId.value = documentId
   activeTab.value = 'chat'
 }
 
@@ -175,12 +184,18 @@ onMounted(() => {
         <el-main class="content-area">
           <transition name="fade" mode="out-in">
             <keep-alive>
-              <DocumentUploader
-                v-if="activeTab === 'upload'"
-                :is-authenticated="isAuthenticated"
-                @document-uploaded="handleDocumentUploaded"
-                @request-auth="authDialogVisible = true"
-              />
+              <div v-if="activeTab === 'upload'" class="upload-view">
+                <DocumentUploader
+                  :is-authenticated="isAuthenticated"
+                  @document-uploaded="handleDocumentUploaded"
+                  @request-auth="authDialogVisible = true"
+                />
+                <DocumentList
+                  ref="documentListRef"
+                  :is-authenticated="isAuthenticated"
+                  @document-selected="handleDocumentSelected"
+                />
+              </div>
               <ChatInterface
                 v-else-if="activeTab === 'chat'"
                 :document-id="currentDocumentId"
@@ -357,6 +372,12 @@ onMounted(() => {
 .content-area {
   padding: 0 40px 40px;
   overflow-y: auto;
+}
+
+.upload-view {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
 }
 
 /* Transitions */

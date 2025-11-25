@@ -11,6 +11,12 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     app_name: str = "Blockchain Whitepaper Analyzer"
     environment: str = "development"
+    log_config_path: Path = Path("backend/app/logging.yaml")
+    log_level: str = "INFO"
+    log_dir: Path = Path("backend/logs")
+    enable_file_logging: bool = True
+    enable_json_logs: bool = True
+    sentry_dsn: Optional[str] = None
 
     # Storage
     storage_base_path: Path = Path("backend/app/storage/uploads")
@@ -25,8 +31,20 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("VITE_SUPABASE_ANON_KEY", "SUPABASE_ANON_KEY"),
     )
 
-    # OpenAI
+    # OpenAI / Gemini
     openai_api_key: Optional[str] = None
+    google_api_key: Optional[str] = Field(
+        default=None,
+        validation_alias=AliasChoices("GEMINI_API_KEY", "GOOGLE_API_KEY"),
+    )
+    llm_provider: str = "openai"  # "openai" | "gemini"
+    openai_model_mini: str = "gpt-4o-mini"
+    openai_model_turbo: str = "gpt-4-turbo"
+    gemini_model_flash: str = "gemini-2.5-flash"
+    gemini_model_pro: str = "gemini-2.5-pro"
+    gemini_embedding_model: str = "text-embedding-004"
+    embedding_provider: str = "openai"
+    embedding_model_openai: str = "text-embedding-3-large"
 
     # Celery / Redis
     redis_url: str = "redis://localhost:6379/0"
@@ -37,6 +55,7 @@ class Settings(BaseSettings):
     chroma_server_port: Optional[int] = None
     chroma_server_ssl: bool = False
     chroma_server_api_key: Optional[str] = None
+    chroma_persist_directory: Optional[Path] = Path("backend/app/storage/chromadb")
     chroma_collection: str = "documents"
     vector_log_dir: Optional[Path] = Path("backend/app/storage/vector_logs")
 

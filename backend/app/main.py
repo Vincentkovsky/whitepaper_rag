@@ -9,7 +9,7 @@ except ImportError:  # pragma: no cover
     sentry_init = None
     FastApiIntegration = None
 
-from .api.routes import auth, documents, subscription, qa
+from .api.routes import auth, documents, subscription, qa, agent
 from .core.config import get_settings
 from .logging_utils import setup_logging
 from .middleware.logging_middleware import RequestLoggingMiddleware
@@ -41,6 +41,7 @@ def create_app() -> FastAPI:
     app.include_router(documents.router)
     app.include_router(subscription.router)
     app.include_router(qa.router)
+    app.include_router(agent.router)
 
     @app.get("/health")
     async def health():

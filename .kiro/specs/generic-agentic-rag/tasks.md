@@ -212,7 +212,7 @@
 
 ## Phase 8: Extensible Analysis Framework
 
-- [-] 14. Implement Analysis Template system
+- [x] 14. Implement Analysis Template system
   - [x] 14.1 Create AnalysisTemplate model
     - Create `backend/app/agent/templates/analysis_template.py`
     - Define AnalysisTemplate with name, description, dimensions, prompts, output_schema
@@ -234,17 +234,17 @@
 
 ## Phase 9: API Layer
 
-- [ ] 16. Create Agent API endpoints
-  - [ ] 16.1 Create agent router
+- [x] 16. Create Agent API endpoints
+  - [x] 16.1 Create agent router
     - Create `backend/app/api/routes/agent.py`
     - Add POST /api/agent/chat endpoint
     - Add POST /api/agent/chat/stream endpoint (SSE)
     - _Requirements: 7.2_
-  - [ ] 16.2 Implement trace parameter support
+  - [x] 16.2 Implement trace parameter support
     - Add optional trace query parameter
     - Include intermediate_steps in response when trace=true
     - _Requirements: 8.2_
-  - [ ] 16.3 Write property test for intermediate steps inclusion
+  - [x] 16.3 Write property test for intermediate steps inclusion
     - **Property 20: Intermediate Steps Inclusion**
     - **Validates: Requirements 8.2**
 

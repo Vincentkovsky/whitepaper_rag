@@ -119,61 +119,61 @@
 
 ## Phase 5: ReAct Agent
 
-- [-] 8. Implement ReAct Agent core
-  - [ ] 8.1 Create ReActAgent class
+- [x] 8. Implement ReAct Agent core
+  - [x] 8.1 Create ReActAgent class
     - Create `backend/app/agent/react_agent.py`
     - Implement reasoning loop with tool calling
     - Integrate with ToolRegistry
     - _Requirements: 2.2, 3.1_
-  - [ ] 8.2 Implement step limit enforcement
+  - [x] 8.2 Implement step limit enforcement
     - Add max_steps parameter (default: 10)
     - Stop execution when limit reached
     - _Requirements: 3.3_
-  - [ ] 8.3 Write property test for step limit invariant
+  - [x] 8.3 Write property test for step limit invariant
     - **Property 9: Step Limit Invariant**
     - **Validates: Requirements 3.3**
-  - [ ] 8.4 Implement state management across steps
+  - [x] 8.4 Implement state management across steps
     - Maintain conversation history and observations
     - Pass context between reasoning steps
     - _Requirements: 3.2_
-  - [ ] 8.5 Write property test for state preservation
+  - [x] 8.5 Write property test for state preservation
     - **Property 8: State Preservation Across Steps**
     - **Validates: Requirements 3.2**
-  - [ ] 8.6 Implement final answer synthesis
+  - [x] 8.6 Implement final answer synthesis
     - Synthesize comprehensive answer from all observations
     - _Requirements: 3.4_
-  - [ ] 8.7 Write property test for final answer synthesis
+  - [x] 8.7 Write property test for final answer synthesis
     - **Property 10: Final Answer Synthesis**
     - **Validates: Requirements 3.4**
 
-- [ ] 9. Implement streaming support
-  - [ ] 9.1 Create async stream generator
+- [x] 9. Implement streaming support
+  - [x] 9.1 Create async stream generator
     - Implement stream() method returning AsyncIterator[AgentStreamEvent]
     - Emit events for: thinking, tool_call, tool_result, answer
     - _Requirements: 1.1_
-  - [ ] 9.2 Write property test for stream initiation latency
+  - [x] 9.2 Write property test for stream initiation latency
     - **Property 1: Stream Initiation Latency**
     - **Validates: Requirements 1.1**
 
-- [ ] 10. Checkpoint - Ensure all tests pass
+- [x] 10. Checkpoint - Ensure all tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
 ## Phase 6: Execution Tracing
 
-- [ ] 11. Implement Execution Tracer
-  - [ ] 11.1 Create ExecutionTracer class
+- [x] 11. Implement Execution Tracer
+  - [x] 11.1 Create ExecutionTracer class
     - Create `backend/app/agent/tracing/tracer.py`
     - Implement start_span(), end_span(), get_trace()
     - Record latency for each span
     - _Requirements: 8.1, 8.3_
-  - [ ] 11.2 Implement LangSmith/LangFuse export
+  - [x] 11.2 Implement LangSmith/LangFuse export
     - Implement export_langsmith() method
     - Conform to expected schema
     - _Requirements: 8.1_
-  - [ ] 11.3 Write property test for trace format compliance
+  - [x] 11.3 Write property test for trace format compliance
     - **Property 19: Trace Format Compliance**
     - **Validates: Requirements 8.1**
-  - [ ] 11.4 Write property test for latency metrics recording
+  - [x] 11.4 Write property test for latency metrics recording
     - **Property 21: Latency Metrics Recording**
     - **Validates: Requirements 8.3**
 

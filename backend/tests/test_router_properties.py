@@ -251,7 +251,7 @@ DOCUMENT_QUERIES: List[str] = [
 ]
 
 
-@settings(max_examples=100, deadline=EXTENDED_DEADLINE)
+@settings(max_examples=100, deadline=None)  # Disable deadline - LLM calls may timeout and fallback
 @given(query=st.sampled_from(DOCUMENT_QUERIES))
 def test_router_document_queries_not_small_talk(query: str):
     """
@@ -263,6 +263,8 @@ def test_router_document_queries_not_small_talk(query: str):
     
     **Validates: Requirements 2.6**
     """
+    # Create router - it may try LLM classification which could timeout,
+    # but the fallback should return DOCUMENT_QA with low confidence
     router = IntentRouter(openai_client=None)
     
     # PROPERTY: Document queries should NOT match small-talk patterns

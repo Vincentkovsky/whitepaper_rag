@@ -18,7 +18,6 @@ except ImportError:  # pragma: no cover
 from ..core.config import get_settings
 from ..logging_utils import bind_document_context
 from .cache_service import CacheService, analysis_cache_key, chunks_cache_key, qa_cache_key
-from ..agent.prompts import PromptTemplate, DEFAULT_QA_TEMPLATE, get_prompt_registry
 
 
 class RAGService:
@@ -35,11 +34,8 @@ class RAGService:
         cache: Optional[CacheService] = None,
         redis_client=None,
         openai_client: Optional[OpenAI] = None,
-        prompt_template: Optional[PromptTemplate] = None,
     ):
         self.settings = get_settings()
-        # Use injected prompt template or fall back to default
-        self.prompt_template = prompt_template or DEFAULT_QA_TEMPLATE
         if chroma_client:
             self.chroma = chroma_client
         else:
@@ -161,30 +157,36 @@ class RAGService:
     def get_relevant_chunks(
         self,
         question: str,
-        document_id: str,
+        document_id: Optional[str],
         user_id: str,
         k: int = 10,
     ) -> List[Dict]:
-        bind_document_context(document_id)
-        cache_key = chunks_cache_key(document_id, question)
+        # Only bind document context if we have a specific document
+        if document_id:
+            bind_document_context(document_id)
+        
+        cache_key = chunks_cache_key(document_id or "all_docs", question)
         cached_chunks = self._cache_get_json(cache_key, layer="chunks")
         if cached_chunks:
             self.logger.debug(
                 "Chunk cache hit",
-                extra={"document_id": document_id, "user_id": user_id, "results": len(cached_chunks)},
+                extra={"document_id": document_id or "all", "user_id": user_id, "results": len(cached_chunks)},
             )
             return cached_chunks
 
         embedding = self._embed_question(question)
         start = time.perf_counter()
+        
+        # Build where clause - filter by user_id, optionally by document_id
+        where_conditions = [{"user_id": {"$eq": user_id}}]
+        if document_id:
+            where_conditions.append({"document_id": {"$eq": document_id}})
+        
+        where_clause = {"$and": where_conditions} if len(where_conditions) > 1 else where_conditions[0]
+        
         results = self.collection.query(
             query_embeddings=[embedding],
-            where={
-                "$and": [
-                    {"user_id": {"$eq": user_id}},
-                    {"document_id": {"$eq": document_id}},
-                ]
-            },
+            where=where_clause,
             n_results=k,
             include=["documents", "metadatas", "distances"],
         )
@@ -204,7 +206,7 @@ class RAGService:
         self.logger.info(
             "Vector search completed",
             extra={
-                "document_id": document_id,
+                "document_id": document_id or "all",
                 "user_id": user_id,
                 "results": len(chunks),
                 "duration_ms": round(duration * 1000, 2),
@@ -289,22 +291,25 @@ class RAGService:
         model_name = self.model_map[model_key]
         temp = temperature if temperature is not None else self.MODEL_TEMPERATURE[model_key]
 
-        # Use configurable prompt template instead of hardcoded prompts
-        user_prompt = self.prompt_template.format_user_prompt(
-            context=context,
-            question=question
+        prompt = (
+            "你是比特币白皮书专家。请仔细阅读上下文，提取关键信息回答问题。\n\n"
+            "规则：\n"
+            "- 答案一定在上下文中，请仔细寻找\n"
+            "- 用中文简洁回答，2-3句话即可\n"
+            "- 直接给出答案，不要说'根据上下文'等废话\n"
+            "- 绝对禁止说'找不到'、'无法回答'、'抱歉'\n\n"
+            f"上下文：\n{context}\n\n"
+            f"问题：{question}\n\n"
+            "答案："
         )
-        system_prompt = self.prompt_template.system_prompt
 
         start = time.perf_counter()
         if self.provider == "gemini":
             if self._gemini_client is None:  # pragma: no cover
                 self._init_gemini()
-            # For Gemini, combine system and user prompts
-            full_prompt = f"{system_prompt}\n\n{user_prompt}"
             response = self._gemini_client.models.generate_content(
                 model=model_name,
-                contents=full_prompt,  # v1 SDK expects string directly
+                contents=prompt,  # v1 SDK expects string directly
                 config=genai_types.GenerateContentConfig(
                     temperature=temp,
                     max_output_tokens=800,
@@ -331,8 +336,8 @@ class RAGService:
         response = self.openai.chat.completions.create(
             model=model_name,
             messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt},
+                {"role": "system", "content": "Answer in Chinese and cite facts from context only."},
+                {"role": "user", "content": prompt},
             ],
             max_tokens=800,
             temperature=temp,

@@ -14,7 +14,7 @@ from typing import Any, Dict, List, Optional
 
 from rank_bm25 import BM25Okapi
 
-from backend.app.agent.retrieval.bm25_service import BM25Service, ChunkData
+from .bm25_service import BM25Service, ChunkData
 
 
 # Default storage directory for BM25 indexes

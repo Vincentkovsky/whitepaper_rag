@@ -1,3 +1,7 @@
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 """
 Property-based tests for AnalysisTemplate serialization.
 
@@ -6,7 +10,7 @@ Property-based tests for AnalysisTemplate serialization.
 
 from hypothesis import given, strategies as st, settings
 
-from backend.app.agent.templates.analysis_template import AnalysisTemplate
+from app.agent.templates.analysis_template import AnalysisTemplate
 
 
 # Custom strategies for generating valid AnalysisTemplate data
@@ -131,7 +135,7 @@ def test_yaml_serialization_round_trip(template: AnalysisTemplate):
 
 
 # Import registry for lifecycle tests
-from backend.app.agent.templates.registry import TemplateRegistry
+from app.agent.templates.registry import TemplateRegistry
 
 
 @settings(max_examples=100)

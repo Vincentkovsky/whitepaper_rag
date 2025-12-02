@@ -9,7 +9,7 @@ import os
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from backend.app.agent.templates.analysis_template import AnalysisTemplate
+from .analysis_template import AnalysisTemplate
 
 
 class TemplateRegistry:

@@ -5,8 +5,8 @@ This module provides extensible analysis templates that can be customized
 for different document types and use cases.
 """
 
-from backend.app.agent.templates.analysis_template import AnalysisTemplate
-from backend.app.agent.templates.registry import (
+from .analysis_template import AnalysisTemplate
+from .registry import (
     TemplateRegistry,
     get_template_registry,
     get_default_template,

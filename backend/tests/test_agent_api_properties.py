@@ -13,16 +13,20 @@ import pytest
 from hypothesis import given, strategies as st, settings, assume, HealthCheck
 from fastapi.testclient import TestClient
 
-from backend.app.agent.types import (
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from app.agent.types import (
     Tool,
     ToolSchema,
     ThoughtStep,
     AgentResponse,
     AgentStreamEvent,
 )
-from backend.app.agent.tools.registry import ToolRegistry
-from backend.app.agent.react_agent import ReActAgent
-from backend.app.api.routes.agent import ChatRequest, ChatResponse
+from app.agent.tools.registry import ToolRegistry
+from app.agent.react_agent import ReActAgent
+from app.api.routes.agent import ChatRequest, ChatResponse
 
 
 # =============================================================================

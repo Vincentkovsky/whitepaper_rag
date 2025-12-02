@@ -1,3 +1,7 @@
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 """
 Property-based tests for Execution Tracer.
 
@@ -10,7 +14,7 @@ from typing import Any, Dict, List
 
 from hypothesis import given, strategies as st, settings, assume
 
-from backend.app.agent.tracing import ExecutionTracer, ExecutionTrace, TraceSpan
+from app.agent.tracing import ExecutionTracer, ExecutionTrace, TraceSpan
 
 
 # =============================================================================

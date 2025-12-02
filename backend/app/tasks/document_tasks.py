@@ -21,6 +21,8 @@ from ..models.document import DocumentSource, DocumentStatus
 from ..repositories.document_repository import DocumentRepository, create_document_repository
 from ..services.chunking_service import StructuredChunker
 from ..services.embedding_service import EmbeddingService
+from ..services.rag_service import RAGService
+from ..services.cache_service import analysis_cache_key
 from ..services.subscription_service import get_subscription_service
 from ..telemetry.task_metrics import (
     record_task_completed,
@@ -43,9 +45,12 @@ celery_app = (
 
 logger = logging.getLogger(__name__)
 
+ANALYSIS_CACHE_TTL = 60 * 60 * 24  # 24h
 DEFAULT_PARSE_SKU = "document_upload_pdf"
+ANALYSIS_SKU = "analysis_report"
 TASK_SLA_SECONDS = {
     "documents.parse": 600,
+    "analysis.generate": 900,
 }
 
 
@@ -70,6 +75,11 @@ def get_openai_client() -> OpenAI:
     if settings.openai_api_key:
         return OpenAI(api_key=settings.openai_api_key)
     return OpenAI()
+
+
+@lru_cache(maxsize=1)
+def get_rag_service() -> RAGService:
+    return RAGService(openai_client=get_openai_client())
 
 
 def _refund_on_failure(user_id: str, sku: str, reason: str) -> None:
@@ -193,6 +203,63 @@ def _update_task_progress(task: Optional[Task], progress: int, message: str) -> 
         logger.debug("Failed to update task progress", exc_info=True)
 
 
+def _execute_analysis_workflow(document_id: str, user_id: str) -> Dict:
+    bind_document_context(document_id)
+    repo = get_document_repository()
+    document = repo.get(document_id)
+    if not document or document.user_id != user_id:
+        raise ValueError("Document not found or access denied")
+    record_task_started("analysis.generate")
+    start_time = time.perf_counter()
+
+    rag_service = get_rag_service()
+    openai_client = get_openai_client()
+
+    planner = make_generate_sub_queries(openai_client)
+    retriever = make_retrieve_all_contexts(rag_service)
+    analyze_fn = make_analyze_dimension(openai_client)
+    analyzers = make_dimension_analyzers(analyze_fn)
+    synthesizer = make_synthesize_final_report(openai_client)
+
+    state: AnalysisState = {
+        "document_id": document_id,
+        "user_id": user_id,
+        "dimensions": list(DEFAULT_DIMENSIONS),
+        "sub_queries": {},
+        "retrieved_contexts": {},
+        "analysis_results": {},
+    }
+
+    try:
+        state.update(planner(state))
+        state.update(retriever(state))
+        for key in ["analyze_tech", "analyze_econ", "analyze_team", "analyze_risk"]:
+            result = analyzers[key](state)
+            state.update(result)
+        final = synthesizer(state)
+        if not final or "final_report" not in final:
+            raise RuntimeError("Failed to synthesize analysis report")
+
+        result = final["final_report"]
+        rag_service.cache.set_json(
+            analysis_cache_key(document_id),
+            result,
+            ttl=ANALYSIS_CACHE_TTL,
+            layer="analysis",
+        )
+        duration = time.perf_counter() - start_time
+        record_task_completed("analysis.generate", duration)
+        _check_sla("analysis.generate", duration)
+        return result
+    except Exception as exc:
+        duration = time.perf_counter() - start_time
+        record_task_failed("analysis.generate", duration, str(exc))
+        _check_sla("analysis.generate", duration, success=False)
+        raise
+    finally:
+        clear_context()
+
+
 def _dispatch_task(task_callable, task_name: str, priority: TaskPriority, *args, **kwargs):
     record_task_enqueued(task_name, priority.value)
     if celery_app and not settings.run_tasks_inline:
@@ -220,6 +287,24 @@ if celery_app:
     ) -> None:
         _parse_document(document_id, user_id, source_url, sku=sku, task=self)
 
+    @celery_app.task(name="analysis.generate", bind=True)
+    def generate_analysis_task(
+        self: Task,
+        document_id: str,
+        user_id: str,
+        sku: str = ANALYSIS_SKU,
+    ) -> Dict:
+        _update_task_progress(self, 0, "开始分析")
+        try:
+            bind_task_context(getattr(self.request, "id", None))
+            report = _execute_analysis_workflow(document_id, user_id)
+            _update_task_progress(self, 100, "分析完成")
+            return report
+        except Exception as exc:
+            _update_task_progress(self, 100, "分析失败")
+            _refund_on_failure(user_id, sku, str(exc))
+            raise
+
 else:
 
     def parse_document_task(
@@ -229,6 +314,17 @@ else:
         sku: str = DEFAULT_PARSE_SKU,
     ) -> None:
         _parse_document(document_id, user_id, source_url, sku=sku, task=None)
+
+    def generate_analysis_task(
+        document_id: str,
+        user_id: str,
+        sku: str = ANALYSIS_SKU,
+    ) -> Dict:
+        try:
+            return _execute_analysis_workflow(document_id, user_id)
+        except Exception as exc:
+            _refund_on_failure(user_id, sku, str(exc))
+            raise
 
 
 def enqueue_parse_document(
@@ -249,3 +345,25 @@ def enqueue_parse_document(
         source_url,
         sku,
     )
+
+
+def enqueue_generate_analysis(
+    document_id: str,
+    user_id: str,
+    *,
+    priority: TaskPriority = TaskPriority.STANDARD,
+    sku: str = ANALYSIS_SKU,
+) -> Optional[Dict]:
+    """Dispatch analysis generation to Celery or run inline."""
+    if celery_app and not settings.run_tasks_inline:
+        _dispatch_task(
+            generate_analysis_task,
+            "analysis.generate",
+            priority,
+            document_id,
+            user_id,
+            sku,
+        )
+        return None
+    return generate_analysis_task(document_id, user_id, sku)
+

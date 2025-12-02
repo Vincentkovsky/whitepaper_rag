@@ -13,8 +13,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Protocol
 
-from backend.app.agent.retrieval.bm25_service import BM25Service, ChunkData
-from backend.app.agent.retrieval.bm25_store import BM25IndexStore
+from .bm25_service import BM25Service, ChunkData
+from .bm25_store import BM25IndexStore
 
 
 class VectorStoreProtocol(Protocol):

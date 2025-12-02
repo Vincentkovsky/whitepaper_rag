@@ -9,7 +9,7 @@ This module provides:
 - Execution tracing
 """
 
-from backend.app.agent.types import (
+from .types import (
     IntentType,
     IntentClassification,
     ToolSchema,
@@ -18,8 +18,8 @@ from backend.app.agent.types import (
     AgentStreamEvent,
     ThoughtStep,
 )
-from backend.app.agent.router import IntentRouter
-from backend.app.agent.react_agent import ReActAgent
+from .router import IntentRouter
+from .react_agent import ReActAgent
 
 __all__ = [
     "IntentType",

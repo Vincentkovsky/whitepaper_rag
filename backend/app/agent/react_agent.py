@@ -31,15 +31,15 @@ except ImportError:  # pragma: no cover
     genai = None
     genai_types = None  # type: ignore
 
-from backend.app.agent.types import (
+from .types import (
     AgentResponse,
     AgentStreamEvent,
     IntentType,
     ThoughtStep,
 )
-from backend.app.agent.router import IntentRouter
-from backend.app.agent.tools.registry import ToolRegistry, ToolNotFoundError
-from backend.app.core.config import get_settings
+from .router import IntentRouter
+from .tools.registry import ToolRegistry, ToolNotFoundError
+from ..core.config import get_settings
 
 
 logger = logging.getLogger(__name__)
@@ -132,16 +132,16 @@ Guidelines:
     async def run(
         self,
         query: str,
-        document_id: str,
         user_id: str,
         stream: bool = False,
     ) -> AgentResponse:
         """
         Execute the agent reasoning loop.
         
+        Searches across all documents belonging to the user.
+        
         Args:
             query: The user's question
-            document_id: ID of the document to query
             user_id: ID of the user making the request
             stream: Whether streaming is enabled (affects internal behavior)
             
@@ -151,10 +151,11 @@ Guidelines:
         start_time = time.perf_counter()
         
         # Check intent if router is available
+        # Only bypass tool usage for very simple greetings (pattern-matched with high confidence)
         if self.router:
             intent = self.router.classify(query)
-            if intent.intent == IntentType.DIRECT_ANSWER:
-                # Handle small-talk directly without tools
+            if intent.intent == IntentType.DIRECT_ANSWER and intent.confidence >= 0.9:
+                # Handle simple greetings directly without tools (pattern-matched only)
                 answer = self._generate_direct_answer(query)
                 return AgentResponse(
                     answer=answer,
@@ -176,7 +177,6 @@ Guidelines:
         conversation_history = self._build_initial_history(
             query=query,
             tools_description=tools_description,
-            document_id=document_id,
             user_id=user_id,
         )
         
@@ -217,7 +217,6 @@ Guidelines:
                 observation = self._execute_tool(
                     action=action,
                     action_input=action_input or {},
-                    document_id=document_id,
                     user_id=user_id,
                 )
                 step.observation = observation
@@ -278,15 +277,15 @@ Guidelines:
     async def stream(
         self,
         query: str,
-        document_id: str,
         user_id: str,
     ) -> AsyncIterator[AgentStreamEvent]:
         """
         Stream agent execution events.
         
+        Searches across all documents belonging to the user.
+        
         Args:
             query: The user's question
-            document_id: ID of the document to query
             user_id: ID of the user making the request
             
         Yields:
@@ -295,9 +294,10 @@ Guidelines:
         start_time = time.perf_counter()
         
         # Check intent if router is available
+        # Only bypass tool usage for very simple greetings (pattern-matched with high confidence)
         if self.router:
             intent = self.router.classify(query)
-            if intent.intent == IntentType.DIRECT_ANSWER:
+            if intent.intent == IntentType.DIRECT_ANSWER and intent.confidence >= 0.9:
                 yield AgentStreamEvent(
                     event_type="thinking",
                     content="This is a simple greeting, responding directly.",
@@ -320,7 +320,6 @@ Guidelines:
         conversation_history = self._build_initial_history(
             query=query,
             tools_description=tools_description,
-            document_id=document_id,
             user_id=user_id,
         )
         
@@ -375,7 +374,6 @@ Guidelines:
                 observation = self._execute_tool(
                     action=action,
                     action_input=action_input or {},
-                    document_id=document_id,
                     user_id=user_id,
                 )
                 observations.append(observation)
@@ -445,18 +443,17 @@ Guidelines:
         self,
         query: str,
         tools_description: str,
-        document_id: str,
         user_id: str,
     ) -> List[Dict[str, str]]:
         """Build the initial conversation history for the agent."""
         system_prompt = self.SYSTEM_PROMPT.format(tools_description=tools_description)
         
-        # Add context about the current document
+        # Add context for the agent
         context = f"""
 Context:
-- Document ID: {document_id}
 - User ID: {user_id}
-- When using document_search, always include document_id and user_id in the action_input.
+- You will search across all documents belonging to this user
+- When using document_search, always include user_id in the action_input
 
 User Question: {query}
 
@@ -580,7 +577,6 @@ Think step by step and decide what to do."""
         self,
         action: str,
         action_input: Dict[str, Any],
-        document_id: str,
         user_id: str,
     ) -> str:
         """
@@ -590,9 +586,7 @@ Think step by step and decide what to do."""
         SHALL log the error and continue reasoning with available information.
         """
         try:
-            # Inject document_id and user_id if not provided
-            if "document_id" not in action_input:
-                action_input["document_id"] = document_id
+            # Inject user_id if not provided
             if "user_id" not in action_input:
                 action_input["user_id"] = user_id
             

@@ -21,8 +21,8 @@ from typing import Any, Dict, List, Optional
 
 import chromadb
 
-from backend.app.agent.retrieval.bm25_service import BM25Service, BM25SearchResult
-from backend.app.agent.retrieval.bm25_store import BM25IndexStore
+from .bm25_service import BM25Service, BM25SearchResult
+from .bm25_store import BM25IndexStore
 
 
 logger = logging.getLogger(__name__)

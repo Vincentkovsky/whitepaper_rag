@@ -7,7 +7,7 @@ enabling loose coupling and easier testing.
 
 from typing import Any, AsyncIterator, Dict, List, Optional, Protocol, runtime_checkable
 
-from backend.app.agent.types import (
+from .types import (
     AgentResponse,
     AgentStreamEvent,
     IntentClassification,

@@ -10,27 +10,27 @@ Contains:
 - RRF (Reciprocal Rank Fusion) algorithm
 """
 
-from backend.app.agent.retrieval.tokenizer import (
+from .tokenizer import (
     tokenize,
     is_chinese_text,
 )
-from backend.app.agent.retrieval.bm25_service import (
+from .bm25_service import (
     BM25Service,
     BM25SearchResult,
     ChunkData,
 )
-from backend.app.agent.retrieval.bm25_store import (
+from .bm25_store import (
     BM25IndexStore,
     BM25IndexData,
 )
-from backend.app.agent.retrieval.index_manager import (
+from .index_manager import (
     IndexManager,
     IndexDocumentRequest,
     IndexResult,
     DeleteResult,
     VectorStoreProtocol,
 )
-from backend.app.agent.retrieval.hybrid_retriever import (
+from .hybrid_retriever import (
     HybridRetriever,
     RetrievalResult,
 )

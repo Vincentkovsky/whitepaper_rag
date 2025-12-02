@@ -1,3 +1,7 @@
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 """
 Tests for IndexManager dual-store transaction mechanism.
 
@@ -11,7 +15,7 @@ from unittest.mock import MagicMock, patch
 import tempfile
 import shutil
 
-from backend.app.agent.retrieval import (
+from app.agent.retrieval import (
     IndexManager,
     IndexDocumentRequest,
     IndexResult,
@@ -266,7 +270,7 @@ class TestDeleteDocument:
         )
         
         # First, manually create a BM25 index
-        from backend.app.agent.retrieval import BM25Service, ChunkData
+        from app.agent.retrieval import BM25Service, ChunkData
         service = BM25Service()
         service.build_index([ChunkData(chunk_id="c1", text="test")])
         bm25_store.save("doc123", service)

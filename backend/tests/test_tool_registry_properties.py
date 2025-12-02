@@ -1,3 +1,7 @@
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 """
 Property-based tests for Tool Registry.
 
@@ -9,8 +13,8 @@ from typing import Any, Dict, List
 from hypothesis import given, strategies as st, settings, assume
 from pydantic import BaseModel
 
-from backend.app.agent.types import Tool, ToolSchema
-from backend.app.agent.tools.registry import ToolRegistry, ToolNotFoundError
+from app.agent.types import Tool, ToolSchema
+from app.agent.tools.registry import ToolRegistry, ToolNotFoundError
 
 
 # Custom strategies for generating valid tool data

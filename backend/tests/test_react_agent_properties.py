@@ -1,3 +1,7 @@
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 """
 Property-based tests for ReAct Agent.
 
@@ -14,9 +18,9 @@ from unittest.mock import MagicMock, patch
 import pytest
 from hypothesis import given, strategies as st, settings, assume, HealthCheck
 
-from backend.app.agent.types import Tool, ToolSchema, ThoughtStep
-from backend.app.agent.tools.registry import ToolRegistry
-from backend.app.agent.react_agent import ReActAgent, DEFAULT_MAX_STEPS
+from app.agent.types import Tool, ToolSchema, ThoughtStep
+from app.agent.tools.registry import ToolRegistry
+from app.agent.react_agent import ReActAgent, DEFAULT_MAX_STEPS
 
 
 # =============================================================================

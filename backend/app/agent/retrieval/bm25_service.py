@@ -14,7 +14,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from rank_bm25 import BM25Okapi
 
-from backend.app.agent.retrieval.tokenizer import tokenize
+from .tokenizer import tokenize
 
 
 @dataclass

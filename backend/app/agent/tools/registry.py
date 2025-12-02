@@ -7,7 +7,7 @@ Manages registration, retrieval, and invocation of callable tools.
 import logging
 from typing import Any, Dict, List, Optional
 
-from backend.app.agent.types import Tool, ToolSchema
+from ..types import Tool, ToolSchema
 
 
 class ToolNotFoundError(ValueError):

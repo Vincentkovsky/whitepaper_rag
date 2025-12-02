@@ -9,8 +9,8 @@ from typing import Any, Dict, List, Optional
 
 import httpx
 
-from backend.app.agent.types import Tool, ToolSchema
-from backend.app.core.config import get_settings
+from ..types import Tool, ToolSchema
+from ...core.config import get_settings
 
 
 logger = logging.getLogger("app.agent.tools.web_search")

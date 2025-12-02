@@ -7,7 +7,7 @@ Contains:
 - Latency metrics recording
 """
 
-from backend.app.agent.tracing.tracer import (
+from .tracer import (
     ExecutionTrace,
     ExecutionTracer,
     TraceSpan,

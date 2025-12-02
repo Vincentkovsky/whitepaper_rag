@@ -1,3 +1,7 @@
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 """
 Property-based tests for Hybrid Retriever.
 
@@ -10,8 +14,8 @@ from hypothesis import given, strategies as st, settings, assume
 import tempfile
 from pathlib import Path
 
-from backend.app.agent.retrieval.hybrid_retriever import HybridRetriever, RetrievalResult
-from backend.app.agent.retrieval.bm25_service import BM25Service, ChunkData, BM25SearchResult
+from app.agent.retrieval.hybrid_retriever import HybridRetriever, RetrievalResult
+from app.agent.retrieval.bm25_service import BM25Service, ChunkData, BM25SearchResult
 
 
 # =============================================================================

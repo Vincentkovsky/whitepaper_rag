@@ -20,8 +20,8 @@ except ImportError:  # pragma: no cover
     genai = None
     genai_types = None  # type: ignore
 
-from backend.app.agent.types import IntentClassification, IntentType
-from backend.app.core.config import get_settings
+from .types import IntentClassification, IntentType
+from ..core.config import get_settings
 
 
 class IntentRouter:

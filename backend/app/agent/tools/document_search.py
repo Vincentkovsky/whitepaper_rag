@@ -7,8 +7,8 @@ Provides document retrieval functionality by integrating with RAGService.
 import logging
 from typing import Any, Dict, List, Optional
 
-from backend.app.agent.types import Tool, ToolSchema
-from backend.app.services.rag_service import RAGService
+from ..types import Tool, ToolSchema
+from ...services.rag_service import RAGService
 
 
 logger = logging.getLogger("app.agent.tools.document_search")
@@ -26,16 +26,16 @@ def create_document_search_tool(rag_service: RAGService) -> Tool:
     
     def document_search(
         query: str,
-        document_id: str,
         user_id: str,
+        document_id: Optional[str] = None,
         k: int = 10,
     ) -> List[Dict[str, Any]]:
-        """Search for relevant chunks in a document.
+        """Search for relevant chunks in documents.
         
         Args:
             query: The search query
-            document_id: ID of the document to search
             user_id: ID of the user making the request
+            document_id: ID of the document to search (optional, searches all user documents if not provided)
             k: Number of results to return (default: 10)
             
         Returns:
@@ -43,13 +43,13 @@ def create_document_search_tool(rag_service: RAGService) -> Tool:
         """
         logger.debug(
             f"Document search: query='{query[:50]}...', "
-            f"document_id={document_id}, user_id={user_id}, k={k}"
+            f"document_id={document_id or 'all'}, user_id={user_id}, k={k}"
         )
         
         try:
             chunks = rag_service.get_relevant_chunks(
                 question=query,
-                document_id=document_id,
+                document_id=document_id,  # Will be None to search all documents
                 user_id=user_id,
                 k=k,
             )
@@ -60,6 +60,7 @@ def create_document_search_tool(rag_service: RAGService) -> Tool:
                 results.append({
                     "id": chunk.get("id"),
                     "text": chunk.get("text", ""),
+                    "document_id": chunk.get("metadata", {}).get("document_id", "unknown"),
                     "section": chunk.get("metadata", {}).get("section_path", "unknown"),
                     "page": chunk.get("metadata", {}).get("page_number"),
                     "relevance_score": 1.0 - chunk.get("distance", 0.0),  # Convert distance to score
@@ -75,9 +76,9 @@ def create_document_search_tool(rag_service: RAGService) -> Tool:
     schema = ToolSchema(
         name="document_search",
         description=(
-            "Search for relevant information in an uploaded document. "
+            "Search for relevant information across the user's documents. "
             "Use this tool when you need to find specific information, "
-            "facts, or context from the user's document."
+            "facts, or context from documents. Searches all user documents by default."
         ),
         parameters={
             "type": "object",
@@ -86,13 +87,13 @@ def create_document_search_tool(rag_service: RAGService) -> Tool:
                     "type": "string",
                     "description": "The search query to find relevant content",
                 },
-                "document_id": {
-                    "type": "string",
-                    "description": "The ID of the document to search",
-                },
                 "user_id": {
                     "type": "string",
                     "description": "The ID of the user making the request",
+                },
+                "document_id": {
+                    "type": "string",
+                    "description": "Optional: The ID of a specific document to search (omit to search all user documents)",
                 },
                 "k": {
                     "type": "integer",
@@ -101,7 +102,7 @@ def create_document_search_tool(rag_service: RAGService) -> Tool:
                 },
             },
         },
-        required=["query", "document_id", "user_id"],
+        required=["query", "user_id"],
     )
     
     return Tool(schema=schema, handler=document_search)

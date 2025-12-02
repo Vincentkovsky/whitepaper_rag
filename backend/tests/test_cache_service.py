@@ -1,6 +1,10 @@
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 import time
 
-from backend.app.services.cache_service import (
+from app.services.cache_service import (
     CacheService,
     qa_cache_key,
     chunks_cache_key,

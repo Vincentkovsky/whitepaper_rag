@@ -248,39 +248,39 @@
     - **Property 20: Intermediate Steps Inclusion**
     - **Validates: Requirements 8.2**
 
-- [ ] 17. Register agent router in main app
+- [x] 17. Register agent router in main app
   - **Modify existing file**: `backend/app/main.py`
   - Import and include agent router
   - _Requirements: 7.2_
 
 ## Phase 10: Configuration and Integration
 
-- [ ] 18. Update configuration
-  - [ ] 18.1 Add new config options
+- [x] 18. Update configuration
+  - [x] 18.1 Add new config options
     - Add TAVILY_API_KEY for web search
     - Add AGENT_MAX_STEPS (default: 10)
     - Add VECTOR_WEIGHT, BM25_WEIGHT for hybrid search
     - Add ROUTER_CONFIDENCE_THRESHOLD (default: 0.8)
     - _Requirements: 2.5, 3.3, 6.4, 2.6_
-  - [ ] 18.2 Update Settings class
+  - [x] 18.2 Update Settings class
     - **Modify existing file**: `backend/app/core/config.py`
     - Add new fields: tavily_api_key, agent_max_steps, vector_weight, bm25_weight, router_confidence_threshold
     - _Requirements: 2.5, 3.3, 6.4_
 
-- [ ] 19. Final integration
-  - [ ] 19.1 Wire up all components
+- [x] 19. Final integration
+  - [x] 19.1 Wire up all components
     - Create AgentService that orchestrates Router, Agent, Retriever, Tracer
     - Add dependency injection in API routes
     - _Requirements: 1.1, 2.2, 3.1_
-  - [ ] 19.2 Write property test for bilingual support
+  - [x] 19.2 Write property test for bilingual support
     - **Property 2: Bilingual Query Support**
     - **Validates: Requirements 1.4**
-  - [ ] 19.3 Write property test for tool result incorporation
+  - [x] 19.3 Write property test for tool result incorporation
     - **Property 4: Tool Result Incorporation**
     - **Validates: Requirements 2.2**
-  - [ ] 19.4 Write property test for complex query decomposition
+  - [x] 19.4 Write property test for complex query decomposition
     - **Property 7: Complex Query Decomposition**
     - **Validates: Requirements 3.1**
 
-- [ ] 20. Final Checkpoint - Ensure all tests pass
+- [x] 20. Final Checkpoint - Ensure all tests pass
   - Ensure all tests pass, ask the user if questions arise.

@@ -1,3 +1,7 @@
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 """
 Property-based tests for Intent Router.
 
@@ -8,8 +12,8 @@ from datetime import timedelta
 from typing import List
 from hypothesis import given, strategies as st, settings, assume
 
-from backend.app.agent.router import IntentRouter
-from backend.app.agent.types import IntentType
+from app.agent.router import IntentRouter
+from app.agent.types import IntentType
 
 
 # Increase deadline for tests that may involve initialization overhead

@@ -25,11 +25,6 @@ def client(tmp_path_factory: pytest.TempPathFactory) -> Generator[TestClient, No
     uploads_dir: Path = tmp_path_factory.mktemp("uploads")
     os.environ["STORAGE_BASE_PATH"] = str(uploads_dir)
     os.environ["DOCUMENT_PIPELINE_ENABLED"] = "false"
-    
-    # Fix logging config path for tests run from backend directory
-    logging_yaml = Path(__file__).parent.parent / "app" / "logging.yaml"
-    os.environ["LOG_CONFIG_PATH"] = str(logging_yaml)
-    os.environ["LOG_DIR"] = str(tmp_path_factory.mktemp("logs"))
 
     get_settings.cache_clear()
     from backend.app.main import create_app

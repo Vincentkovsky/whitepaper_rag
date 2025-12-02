@@ -1,3 +1,7 @@
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 """
 Property-based tests for configurable prompts.
 
@@ -7,14 +11,14 @@ Property-based tests for configurable prompts.
 from unittest.mock import MagicMock, patch
 from hypothesis import given, strategies as st, settings, assume
 
-from backend.app.agent.prompts import (
+from app.agent.prompts import (
     PromptTemplate,
     PromptTemplateRegistry,
     DEFAULT_QA_TEMPLATE,
     CHINESE_QA_TEMPLATE,
     get_prompt_registry,
 )
-from backend.app.services.rag_service import RAGService
+from app.services.rag_service import RAGService
 
 
 # Custom strategies for generating valid prompt templates

@@ -1,3 +1,7 @@
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 """
 Unit tests for the unified tokenizer utility.
 
@@ -10,7 +14,7 @@ Tests cover:
 """
 
 import pytest
-from backend.app.agent.retrieval.tokenizer import (
+from app.agent.retrieval.tokenizer import (
     tokenize,
     is_chinese_text,
     _is_cjk_char,

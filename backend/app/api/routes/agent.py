@@ -22,11 +22,7 @@ from pydantic import BaseModel, Field
 
 from ...core.security import UserContext, get_current_user
 from ...services.subscription_service import SubscriptionService, get_subscription_service
-from ...services.rag_service import RAGService
-from ...agent.react_agent import ReActAgent
-from ...agent.router import IntentRouter
-from ...agent.tools.registry import ToolRegistry
-from ...agent.tools.document_search import create_document_search_tool
+from ...services.agent_service import AgentService, get_agent_service
 from ...agent.types import AgentResponse, ThoughtStep
 
 
@@ -37,7 +33,6 @@ router = APIRouter(prefix="/api/agent", tags=["agent"])
 
 class ChatRequest(BaseModel):
     """Request body for agent chat endpoints."""
-    document_id: str = Field(description="ID of the document to query")
     question: str = Field(description="The user's question")
     model: str = Field(default="mini", description="Model to use: 'mini' or 'turbo'")
 
@@ -53,34 +48,9 @@ class ChatResponse(BaseModel):
     )
 
 
-def _create_agent() -> ReActAgent:
-    """Create and configure a ReAct agent with tools."""
-    # Create tool registry and register built-in tools
-    registry = ToolRegistry()
-    
-    # Create RAG service for document search
-    rag_service = RAGService()
-    
-    # Register document search tool
-    doc_search_tool = create_document_search_tool(rag_service)
-    registry.register(doc_search_tool)
-    
-    # Create intent router
-    intent_router = IntentRouter()
-    
-    # Create agent
-    agent = ReActAgent(
-        tool_registry=registry,
-        router=intent_router,
-        max_steps=10,
-    )
-    
-    return agent
-
-
-def get_agent_dep() -> ReActAgent:
-    """Dependency for getting the agent instance."""
-    return _create_agent()
+def get_agent_service_dep() -> AgentService:
+    """Dependency for getting the AgentService instance."""
+    return get_agent_service()
 
 
 def get_subscription_service_dep() -> SubscriptionService:
@@ -98,7 +68,7 @@ async def chat(
     payload: ChatRequest,
     trace: bool = Query(default=False, description="Include intermediate reasoning steps"),
     current_user: UserContext = Depends(get_current_user),
-    agent: ReActAgent = Depends(get_agent_dep),
+    agent_service: AgentService = Depends(get_agent_service_dep),
     subscription: SubscriptionService = Depends(get_subscription_service_dep),
 ) -> ChatResponse:
     """
@@ -111,7 +81,7 @@ async def chat(
         payload: The chat request containing document_id and question
         trace: If true, include intermediate_steps in the response (Requirement 8.2)
         current_user: The authenticated user
-        agent: The ReAct agent instance
+        agent_service: The AgentService instance for orchestration
         subscription: The subscription service for billing
         
     Returns:
@@ -128,12 +98,11 @@ async def chat(
         )
     
     try:
-        # Run the agent
-        response: AgentResponse = await agent.run(
+        # Run the agent via AgentService
+        response: AgentResponse = await agent_service.chat(
             query=payload.question,
-            document_id=payload.document_id,
             user_id=current_user.id,
-            stream=False,
+            trace_enabled=trace,
         )
         
         # Build response
@@ -172,7 +141,7 @@ async def chat_stream(
     payload: ChatRequest,
     trace: bool = Query(default=False, description="Include intermediate reasoning steps"),
     current_user: UserContext = Depends(get_current_user),
-    agent: ReActAgent = Depends(get_agent_dep),
+    agent_service: AgentService = Depends(get_agent_service_dep),
     subscription: SubscriptionService = Depends(get_subscription_service_dep),
 ) -> StreamingResponse:
     """
@@ -192,7 +161,7 @@ async def chat_stream(
         payload: The chat request containing document_id and question
         trace: If true, include more detailed step information in events
         current_user: The authenticated user
-        agent: The ReAct agent instance
+        agent_service: The AgentService instance for orchestration
         subscription: The subscription service for billing
         
     Returns:
@@ -211,10 +180,10 @@ async def chat_stream(
     async def event_generator():
         """Generate SSE events from the agent stream."""
         try:
-            async for event in agent.stream(
+            async for event in agent_service.chat_stream(
                 query=payload.question,
-                document_id=payload.document_id,
                 user_id=current_user.id,
+                trace_enabled=trace,
             ):
                 # Format as SSE event
                 event_data = {

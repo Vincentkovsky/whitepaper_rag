@@ -63,13 +63,16 @@ class Settings(BaseSettings):
     chroma_collection: str = "documents"
     vector_log_dir: Optional[Path] = Path("backend/app/storage/vector_logs")
 
-    # Web Search APIs
-    tavily_api_key: Optional[str] = None
-    serpapi_key: Optional[str] = None
-
     # Feature flags
     run_tasks_inline: bool = True
     document_pipeline_enabled: bool = True
+
+    # Agent configuration
+    vector_weight: float = 0.7  # Weight for vector search in hybrid retrieval
+    bm25_weight: float = 0.3  # Weight for BM25 search in hybrid retrieval
+    agent_max_steps: int = 10  # Maximum reasoning steps for agent
+    router_confidence_threshold: float = 0.8  # Confidence threshold for intent classification
+    tavily_api_key: Optional[str] = None  # API key for Tavily web search
 
     model_config = SettingsConfigDict(
         env_file=".env",

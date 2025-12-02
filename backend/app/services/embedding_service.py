@@ -17,7 +17,6 @@ except ImportError:  # pragma: no cover
     genai = None
 
 from ..core.config import get_settings
-from ..agent.retrieval import BM25Service, BM25IndexStore, ChunkData
 
 
 def _now_iso() -> str:
@@ -59,9 +58,6 @@ class EmbeddingService:
             Path(self.log_dir).mkdir(parents=True, exist_ok=True)
         if self.provider == "gemini":
             self._init_gemini()
-        
-        # Initialize BM25 index store for hybrid retrieval
-        self._bm25_store = BM25IndexStore()
 
     def _client(self) -> OpenAI:
         if self._openai_client is None:
@@ -120,9 +116,6 @@ class EmbeddingService:
                     "duration_ms": round((time.perf_counter() - batch_start) * 1000, 2),
                 },
             )
-        
-        # Build and persist BM25 index for hybrid retrieval
-        self._build_bm25_index(document_id, user_id, batch_ids, batch_texts, batch_metadatas)
 
     def delete_document_vectors(self, document_id: str, user_id: str) -> None:
         try:
@@ -139,98 +132,6 @@ class EmbeddingService:
             self.logger.warning(
                 "Failed to delete document vectors (may not exist)",
                 extra={"document_id": document_id, "user_id": user_id, "error": str(e)},
-            )
-        
-        # Also delete BM25 index
-        self._delete_bm25_index(document_id)
-    
-    def _build_bm25_index(
-        self,
-        document_id: str,
-        user_id: str,
-        chunk_ids: List[str],
-        texts: List[str],
-        metadatas: List[Dict[str, str]],
-    ) -> None:
-        """
-        Build and persist a BM25 index for the document chunks.
-        
-        This enables hybrid retrieval by combining vector search with
-        keyword-based BM25 search.
-        
-        Args:
-            document_id: Unique identifier for the document
-            user_id: User who owns the document
-            chunk_ids: List of chunk identifiers
-            texts: List of chunk text content
-            metadatas: List of chunk metadata dictionaries
-        """
-        if not texts:
-            self.logger.warning(
-                "No chunks to index for BM25",
-                extra={"document_id": document_id, "user_id": user_id},
-            )
-            return
-        
-        try:
-            bm25_start = time.perf_counter()
-            
-            # Create ChunkData objects for BM25 indexing
-            chunks = [
-                ChunkData(
-                    chunk_id=chunk_id,
-                    text=text,
-                    metadata={**metadata, "user_id": user_id, "document_id": document_id},
-                )
-                for chunk_id, text, metadata in zip(chunk_ids, texts, metadatas)
-            ]
-            
-            # Build the BM25 index
-            bm25_service = BM25Service()
-            bm25_service.build_index(chunks)
-            
-            # Persist the index to disk
-            self._bm25_store.save(document_id, bm25_service)
-            
-            self.logger.info(
-                "Built BM25 index",
-                extra={
-                    "document_id": document_id,
-                    "user_id": user_id,
-                    "chunk_count": len(chunks),
-                    "duration_ms": round((time.perf_counter() - bm25_start) * 1000, 2),
-                },
-            )
-        except Exception as e:
-            self.logger.error(
-                "Failed to build BM25 index",
-                extra={
-                    "document_id": document_id,
-                    "user_id": user_id,
-                    "error": str(e),
-                },
-            )
-            # Don't raise - BM25 indexing failure shouldn't block embedding
-            # The system can fall back to vector-only search
-    
-    def _delete_bm25_index(self, document_id: str) -> None:
-        """
-        Delete the BM25 index for a document.
-        
-        Args:
-            document_id: Unique identifier for the document
-        """
-        try:
-            deleted = self._bm25_store.delete(document_id)
-            if deleted:
-                self.logger.info(
-                    "Deleted BM25 index",
-                    extra={"document_id": document_id},
-                )
-        except Exception as e:
-            self.logger.warning(
-                "Failed to delete BM25 index (may not exist)",
-                extra={"document_id": document_id, "error": str(e)},
             )
 
     def _log_batch(self, document_id: str, user_id: str, ids: List[str], metadatas: List[Dict[str, str]]) -> None:

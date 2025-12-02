@@ -4,17 +4,20 @@ Tests for the index reconciliation script.
 Tests the ReconciliationReport and IndexReconciler classes.
 """
 
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 import pytest
 from unittest.mock import MagicMock, patch
-from pathlib import Path
 import tempfile
 
-from backend.scripts.reconcile_indexes import (
+from scripts.reconcile_indexes import (
     ReconciliationReport,
     IndexReconciler,
 )
-from backend.app.agent.retrieval.bm25_store import BM25IndexStore
-from backend.app.agent.retrieval.bm25_service import BM25Service, ChunkData
+from app.agent.retrieval.bm25_store import BM25IndexStore
+from app.agent.retrieval.bm25_service import BM25Service, ChunkData
 
 
 class TestReconciliationReport:

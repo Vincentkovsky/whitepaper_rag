@@ -492,7 +492,7 @@ export function ChatWorkbench() {
                   Start a conversation
                 </h2>
                 <p className="text-gray-500 dark:text-gray-400 max-w-md">
-                  Ask questions about your documents and get AI-powered answers with citations.
+                  Refracting complexity into clarity.
                 </p>
               </div>
             ) : (

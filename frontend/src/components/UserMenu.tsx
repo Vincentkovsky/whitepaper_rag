@@ -9,7 +9,7 @@ import { authService } from '../services/authService';
 import { useUIStore } from '../stores/uiStore';
 
 export function UserMenu() {
-  const { user } = useAuthStore();
+  const { user, isLoading } = useAuthStore();
   const { showToast, theme, toggleTheme } = useUIStore();
   const [isOpen, setIsOpen] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
@@ -42,7 +42,7 @@ export function UserMenu() {
   const handleLogout = async () => {
     setIsLoggingOut(true);
     try {
-      await authService.signOut();
+      await authService.logout();
       showToast('success', 'Successfully logged out');
     } catch {
       showToast('error', 'Failed to log out');
@@ -52,8 +52,21 @@ export function UserMenu() {
     }
   };
 
+  if (isLoading) {
+    return (
+      <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 animate-pulse" />
+    );
+  }
+
   if (!user) {
-    return null;
+    return (
+      <a
+        href="/login"
+        className="text-sm font-medium text-[var(--text-primary)] hover:text-primary-600 transition-colors"
+      >
+        Log in
+      </a>
+    );
   }
 
   // Get initials for avatar fallback

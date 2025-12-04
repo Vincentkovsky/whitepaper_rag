@@ -134,6 +134,67 @@ class EmbeddingService:
                 extra={"document_id": document_id, "user_id": user_id, "error": str(e)},
             )
 
+    def list_documents(self) -> List[Dict]:
+        """List all documents currently in ChromaDB (expensive operation)"""
+        try:
+            # Fetch all metadatas to aggregate unique documents
+            # Note: This is not scalable for millions of chunks but fine for admin tool
+            result = self.collection.get(include=["metadatas"])
+            metadatas = result.get("metadatas", []) or []
+            
+            docs: Dict[str, Dict] = {}
+            for m in metadatas:
+                if not m:
+                    continue
+                doc_id = str(m.get("document_id", ""))
+                if not doc_id:
+                    continue
+                
+                if doc_id not in docs:
+                    docs[doc_id] = {
+                        "document_id": doc_id,
+                        "user_id": str(m.get("user_id", "")),
+                        "chunk_count": 0,
+                        "created_at": str(m.get("created_at", "")),
+                    }
+                docs[doc_id]["chunk_count"] += 1
+            
+            return list(docs.values())
+        except Exception as e:
+            self.logger.error("Failed to list documents from Chroma", exc_info=True)
+            return []
+
+    def get_document_chunks(self, document_id: str) -> List[Dict]:
+        """Get all chunks for a specific document"""
+        try:
+            result = self.collection.get(
+                where={"document_id": document_id},
+                include=["metadatas", "documents", "embeddings"]
+            )
+            
+            chunks = []
+            ids = result.get("ids", [])
+            metadatas = result.get("metadatas", []) or []
+            documents = result.get("documents", []) or []
+            
+            for i, chunk_id in enumerate(ids):
+                chunks.append({
+                    "id": chunk_id,
+                    "text": documents[i] if i < len(documents) else "",
+                    "metadata": metadatas[i] if i < len(metadatas) else {},
+                })
+            
+            # Sort by chunk index if possible (assuming id format document_id_chunk_N)
+            try:
+                chunks.sort(key=lambda x: int(x["id"].split("_chunk_")[-1]))
+            except (ValueError, IndexError):
+                pass
+                
+            return chunks
+        except Exception as e:
+            self.logger.error(f"Failed to get chunks for document {document_id}", exc_info=True)
+            return []
+
     def _log_batch(self, document_id: str, user_id: str, ids: List[str], metadatas: List[Dict[str, str]]) -> None:
         if not self.log_dir:
             return

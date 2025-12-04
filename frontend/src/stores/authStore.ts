@@ -4,6 +4,7 @@
  */
 
 import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 import type { User } from '../types';
 
 interface AuthState {
@@ -18,44 +19,68 @@ interface AuthActions {
   refreshToken: (accessToken: string) => void;
   setLoading: (isLoading: boolean) => void;
   isAuthenticated: () => boolean;
+  initializeFromStorage: () => void;
 }
 
 type AuthStore = AuthState & AuthActions;
 
-export const useAuthStore = create<AuthStore>((set, get) => ({
-  // State
-  user: null,
-  accessToken: null,
-  isLoading: false,
-
-  // Computed as function (Zustand doesn't support getters)
-  isAuthenticated: () => {
-    const state = get();
-    return state.user !== null && state.accessToken !== null;
-  },
-
-  // Actions
-  login: (user: User, accessToken: string) => {
-    set({
-      user,
-      accessToken,
-      isLoading: false,
-    });
-  },
-
-  logout: () => {
-    set({
+export const useAuthStore = create<AuthStore>()(
+  persist(
+    (set, get) => ({
+      // State
       user: null,
       accessToken: null,
       isLoading: false,
-    });
-  },
 
-  refreshToken: (accessToken: string) => {
-    set({ accessToken });
-  },
+      // Computed as function (Zustand doesn't support getters)
+      isAuthenticated: () => {
+        const state = get();
+        return state.user !== null && state.accessToken !== null;
+      },
 
-  setLoading: (isLoading: boolean) => {
-    set({ isLoading });
-  },
-}));
+      // Initialize from localStorage
+      initializeFromStorage: () => {
+        const token = localStorage.getItem('auth_token');
+        if (token) {
+          set({ accessToken: token });
+        }
+      },
+
+      // Actions
+      login: (user: User, accessToken: string) => {
+        localStorage.setItem('auth_token', accessToken);
+        set({
+          user,
+          accessToken,
+          isLoading: false,
+        });
+      },
+
+      logout: () => {
+        localStorage.removeItem('auth_token');
+        set({
+          user: null,
+          accessToken: null,
+          isLoading: false,
+        });
+      },
+
+      refreshToken: (accessToken: string) => {
+        localStorage.setItem('auth_token', accessToken);
+        set({ accessToken });
+      },
+
+      setLoading: (isLoading: boolean) => {
+        set({ isLoading });
+      },
+    }),
+    {
+      name: 'auth-storage',
+      partialize: (state) => ({
+        accessToken: state.accessToken,
+        user: state.user
+      }),
+    }
+  )
+);
+

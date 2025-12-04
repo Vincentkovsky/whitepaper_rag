@@ -101,6 +101,11 @@ class SubscriptionService:
         ledger.history.append({"sku": sku, "action": "consume"})
         return True
 
+    def consume_credits(self, user_id: str, sku: str) -> None:
+        """Consume credits or raise error if insufficient"""
+        if not self.check_and_consume(user_id, sku):
+            raise ValueError("Insufficient credits")
+
     def refund_credits(self, user_id: str, sku: str, reason: str | None = None) -> None:
         pricing = CREDIT_PRICING.get(sku)
         if not pricing:

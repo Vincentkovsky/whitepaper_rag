@@ -7,34 +7,35 @@ import { Label } from '../components/ui/label';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '../components/ui/card';
 import { Alert, AlertDescription } from '../components/ui/alert';
 
-export default function Login() {
+export default function Register() {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
+    const [name, setName] = useState('');
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
     const navigate = useNavigate();
 
-    const handleEmailLogin = async (e: React.FormEvent) => {
+    const handleRegister = async (e: React.FormEvent) => {
         e.preventDefault();
         setError('');
         setLoading(true);
 
         try {
-            await authService.login({ email, password });
+            await authService.register({ email, password, name });
             navigate('/');
         } catch (err) {
-            setError(err instanceof Error ? err.message : 'Login failed');
+            setError(err instanceof Error ? err.message : 'Registration failed');
         } finally {
             setLoading(false);
         }
     };
 
-    const handleGoogleLogin = async () => {
+    const handleGoogleSignup = async () => {
         setError('');
         try {
             await authService.loginWithGoogle();
         } catch (err) {
-            setError(err instanceof Error ? err.message : 'Google login failed');
+            setError(err instanceof Error ? err.message : 'Google signup failed');
         }
     };
 
@@ -42,9 +43,9 @@ export default function Login() {
         <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
             <Card className="w-full max-w-md">
                 <CardHeader className="space-y-1">
-                    <CardTitle className="text-2xl font-bold text-center">Sign in to Prism</CardTitle>
+                    <CardTitle className="text-2xl font-bold text-center">Create an account</CardTitle>
                     <CardDescription className="text-center">
-                        Enter your email and password to access your account
+                        Enter your information to get started
                     </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
@@ -54,7 +55,19 @@ export default function Login() {
                         </Alert>
                     )}
 
-                    <form onSubmit={handleEmailLogin} className="space-y-4">
+                    <form onSubmit={handleRegister} className="space-y-4">
+                        <div className="space-y-2">
+                            <Label htmlFor="name">Name</Label>
+                            <Input
+                                id="name"
+                                type="text"
+                                placeholder="John Doe"
+                                value={name}
+                                onChange={(e) => setName(e.target.value)}
+                                disabled={loading}
+                            />
+                        </div>
+
                         <div className="space-y-2">
                             <Label htmlFor="email">Email</Label>
                             <Input
@@ -77,11 +90,12 @@ export default function Login() {
                                 onChange={(e) => setPassword(e.target.value)}
                                 required
                                 disabled={loading}
+                                placeholder="At least 8 characters"
                             />
                         </div>
 
                         <Button type="submit" className="w-full" disabled={loading}>
-                            {loading ? 'Signing in...' : 'Sign in'}
+                            {loading ? 'Creating account...' : 'Create account'}
                         </Button>
                     </form>
 
@@ -98,7 +112,7 @@ export default function Login() {
                         type="button"
                         variant="outline"
                         className="w-full"
-                        onClick={handleGoogleLogin}
+                        onClick={handleGoogleSignup}
                         disabled={loading}
                     >
                         <svg className="mr-2 h-4 w-4" viewBox="0 0 24 24">
@@ -124,9 +138,9 @@ export default function Login() {
                 </CardContent>
                 <CardFooter className="flex flex-col space-y-4">
                     <div className="text-sm text-center text-gray-500">
-                        Don't have an account?{' '}
-                        <a href="/register" className="text-blue-600 hover:underline">
-                            Sign up
+                        Already have an account?{' '}
+                        <a href="/login" className="text-blue-600 hover:underline">
+                            Sign in
                         </a>
                     </div>
                 </CardFooter>

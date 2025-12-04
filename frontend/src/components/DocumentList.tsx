@@ -22,12 +22,12 @@ const POLLING_INTERVAL = 3000;
 function getStatusBadgeClass(status: DocumentStatus): string {
   const baseClass = 'px-2 py-1 text-xs font-medium rounded-full';
   switch (status) {
-    case 'ready':
+    case 'completed':
       return `${baseClass} bg-success-100 text-success-700 dark:bg-success-900/30 dark:text-success-400`;
-    case 'processing':
+    case 'parsing':
       return `${baseClass} bg-warning-100 text-warning-700 dark:bg-warning-900/30 dark:text-warning-400`;
-    case 'pending':
-      return `${baseClass} bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400`;
+    case 'uploading':
+      return `${baseClass} bg-blue-100 text-blue-700 dark:bg-blue-800 dark:text-blue-400`;
     case 'failed':
       return `${baseClass} bg-error-100 text-error-700 dark:bg-error-900/30 dark:text-error-400`;
     default:
@@ -40,12 +40,12 @@ function getStatusBadgeClass(status: DocumentStatus): string {
  */
 function getStatusText(status: DocumentStatus): string {
   switch (status) {
-    case 'ready':
-      return 'Ready';
-    case 'processing':
-      return 'Processing';
-    case 'pending':
-      return 'Pending';
+    case 'completed':
+      return 'Completed';
+    case 'parsing':
+      return 'Parsing';
+    case 'uploading':
+      return 'Uploading';
     case 'failed':
       return 'Failed';
     default:
@@ -74,17 +74,20 @@ export function DocumentList({ onDocumentSelect, onDocumentDelete }: DocumentLis
    */
   const pollDocumentStatus = useCallback(async (documentId: string) => {
     try {
-      const response = await apiClient.get<{ status: DocumentStatus; errorMessage?: string }>(
+      if (!documentId) {
+        return;
+      }
+      const response = await apiClient.get<{ status: DocumentStatus; error_message?: string }>(
         `/documents/${documentId}/status`
       );
 
       updateDocument(documentId, {
         status: response.status,
-        errorMessage: response.errorMessage,
+        error_message: response.error_message,
       });
 
       // Stop polling if document is no longer processing
-      if (response.status !== 'processing' && response.status !== 'pending') {
+      if (response.status !== 'parsing' && response.status !== 'uploading') {
         const timeoutId = pollingRef.current.get(documentId);
         if (timeoutId) {
           clearInterval(timeoutId);
@@ -101,7 +104,7 @@ export function DocumentList({ onDocumentSelect, onDocumentDelete }: DocumentLis
    */
   useEffect(() => {
     const processingDocs = documents.filter(
-      doc => doc.status === 'processing' || doc.status === 'pending'
+      doc => doc.status === 'parsing' || doc.status === 'uploading'
     );
 
     // Start polling for each processing document
@@ -120,7 +123,7 @@ export function DocumentList({ onDocumentSelect, onDocumentDelete }: DocumentLis
     // Clean up polling for documents that are no longer processing
     for (const [docId, intervalId] of pollingRef.current.entries()) {
       const doc = documents.find(d => d.id === docId);
-      if (!doc || (doc.status !== 'processing' && doc.status !== 'pending')) {
+      if (!doc || (doc.status !== 'parsing' && doc.status !== 'uploading')) {
         clearInterval(intervalId);
         pollingRef.current.delete(docId);
       }
@@ -227,24 +230,16 @@ export function DocumentList({ onDocumentSelect, onDocumentDelete }: DocumentLis
               </div>
               <div className="flex-1 min-w-0">
                 <h3 className="text-sm font-medium text-[var(--text-primary)] truncate">
-                  {document.name}
+                  {document.title || document.source_value}
                 </h3>
                 <div className="flex items-center gap-2 mt-1">
                   <span className="text-xs text-[var(--text-muted)]">
-                    {formatDate(document.createdAt)}
+                    {formatDate(document.created_at)}
                   </span>
-                  {document.pageCount && (
-                    <>
-                      <span className="text-[var(--text-muted)]">•</span>
-                      <span className="text-xs text-[var(--text-muted)]">
-                        {document.pageCount} {document.pageCount === 1 ? 'page' : 'pages'}
-                      </span>
-                    </>
-                  )}
                 </div>
-                {document.status === 'failed' && document.errorMessage && (
+                {document.status === 'failed' && document.error_message && (
                   <p className="mt-1 text-xs text-error-500 truncate">
-                    {document.errorMessage}
+                    {document.error_message}
                   </p>
                 )}
               </div>
@@ -253,7 +248,7 @@ export function DocumentList({ onDocumentSelect, onDocumentDelete }: DocumentLis
             {/* Status Badge and Actions */}
             <div className="flex items-center gap-2 flex-shrink-0">
               <span className={getStatusBadgeClass(document.status)}>
-                {document.status === 'processing' && (
+                {document.status === 'parsing' && (
                   <span className="inline-block w-2 h-2 mr-1.5 bg-current rounded-full animate-pulse" />
                 )}
                 {getStatusText(document.status)}
@@ -263,7 +258,7 @@ export function DocumentList({ onDocumentSelect, onDocumentDelete }: DocumentLis
               <button
                 onClick={(e) => handleDeleteClick(e, document)}
                 className="opacity-0 group-hover:opacity-100 p-1.5 rounded-md text-[var(--text-muted)] hover:text-error-500 hover:bg-error-50 dark:hover:bg-error-900/20 transition-all duration-200"
-                aria-label={`Delete ${document.name}`}
+                aria-label={`Delete ${document.title || document.source_value}`}
               >
                 <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path

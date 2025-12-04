@@ -3,13 +3,16 @@
  * Requirements: 7.1
  */
 
-export type DocumentStatus = 'pending' | 'processing' | 'ready' | 'failed';
+export type DocumentStatus = 'uploading' | 'parsing' | 'completed' | 'failed';
 
 export interface Document {
   id: string;
-  name: string;
+  user_id: string;
+  source_type: 'pdf' | 'url' | 'text';
+  source_value: string;
+  title?: string;
   status: DocumentStatus;
-  errorMessage?: string;
-  createdAt: string;
-  pageCount?: number;
+  error_message?: string;
+  created_at: string;
+  updated_at: string;
 }

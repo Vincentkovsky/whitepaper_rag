@@ -26,70 +26,73 @@ function DeleteDialog({ document, isOpen, isDeleting, onConfirm, onCancel }: Del
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm transition-opacity"
       onClick={onCancel}
       role="dialog"
       aria-modal="true"
       aria-labelledby="delete-dialog-title"
     >
       <div
-        className="bg-[var(--bg-secondary)] rounded-xl shadow-xl max-w-md w-full p-6 border border-[var(--border-color)]"
+        className="bg-[var(--bg-secondary)] rounded-2xl shadow-2xl max-w-md w-full p-6 border border-[var(--border-color)] transform transition-all scale-100"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Icon */}
-        <div className="mx-auto w-12 h-12 rounded-full bg-error-100 dark:bg-error-900/30 flex items-center justify-center mb-4">
-          <svg
-            className="w-6 h-6 text-error-500"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-            />
-          </svg>
-        </div>
+        <div className="flex flex-col items-center text-center sm:items-start sm:text-left">
+          {/* Icon */}
+          <div className="mx-auto sm:mx-0 w-12 h-12 rounded-full bg-error-100 dark:bg-error-900/30 flex items-center justify-center mb-4 shrink-0">
+            <svg
+              className="w-6 h-6 text-error-600 dark:text-error-400"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+              />
+            </svg>
+          </div>
 
-        {/* Title */}
-        <h2
-          id="delete-dialog-title"
-          className="text-lg font-semibold text-[var(--text-primary)] text-center mb-2"
-        >
-          Delete Document
-        </h2>
+          {/* Content */}
+          <div className="w-full">
+            <h2
+              id="delete-dialog-title"
+              className="text-xl font-semibold text-[var(--text-primary)] mb-2"
+            >
+              Delete Document
+            </h2>
 
-        {/* Message */}
-        <p className="text-sm text-[var(--text-secondary)] text-center mb-6">
-          Are you sure you want to delete <span className="font-medium text-[var(--text-primary)]">{document.name}</span>?
-          This action cannot be undone.
-        </p>
+            <p className="text-sm text-[var(--text-secondary)] mb-6 leading-relaxed">
+              Are you sure you want to delete <span className="font-semibold text-[var(--text-primary)] break-all">{document.title || document.source_value || 'this document'}</span>?
+              This action cannot be undone and will remove all associated data.
+            </p>
 
-        {/* Actions */}
-        <div className="flex gap-3">
-          <button
-            onClick={onCancel}
-            disabled={isDeleting}
-            className="flex-1 px-4 py-2.5 rounded-lg border border-[var(--border-color)] text-[var(--text-primary)] font-medium hover:bg-[var(--bg-tertiary)] transition-colors duration-200 disabled:opacity-50"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={onConfirm}
-            disabled={isDeleting}
-            className="flex-1 px-4 py-2.5 rounded-lg bg-error-500 text-white font-medium hover:bg-error-600 transition-colors duration-200 disabled:opacity-50 flex items-center justify-center gap-2"
-          >
-            {isDeleting ? (
-              <>
-                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                <span>Deleting...</span>
-              </>
-            ) : (
-              <span>Delete</span>
-            )}
-          </button>
+            {/* Actions */}
+            <div className="flex flex-col-reverse sm:flex-row gap-3 sm:justify-end w-full">
+              <button
+                onClick={onCancel}
+                disabled={isDeleting}
+                className="px-4 py-2.5 rounded-lg border border-[var(--border-color)] text-[var(--text-primary)] font-medium hover:bg-[var(--bg-tertiary)] transition-colors duration-200 disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-gray-200 dark:focus:ring-gray-700"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={onConfirm}
+                disabled={isDeleting}
+                className="px-4 py-2.5 rounded-lg bg-error-600 hover:bg-error-700 text-white font-medium transition-colors duration-200 disabled:opacity-50 flex items-center justify-center gap-2 focus:outline-none focus:ring-2 focus:ring-error-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900 shadow-sm"
+              >
+                {isDeleting ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    <span>Deleting...</span>
+                  </>
+                ) : (
+                  <span>Delete Document</span>
+                )}
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -140,7 +143,7 @@ export function Documents() {
     try {
       await apiClient.delete(`/documents/${documentToDelete.id}`);
       deleteDocument(documentToDelete.id);
-      showToast('success', `${documentToDelete.name} deleted successfully`);
+      showToast('success', `${documentToDelete.title || documentToDelete.source_value} deleted successfully`);
       setDocumentToDelete(null);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to delete document';

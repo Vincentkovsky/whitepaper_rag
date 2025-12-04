@@ -7,6 +7,7 @@ from typing import Any, Dict, Optional
 import time
 
 import httpx
+import asyncio
 from openai import OpenAI
 
 try:
@@ -16,9 +17,10 @@ except ImportError:  # pragma: no cover
     Task = Any  # type: ignore
 
 from ..core.config import get_settings
+from ..core.database import AsyncSessionLocal
 from ..logging_utils import bind_document_context, bind_task_context, clear_context
 from ..models.document import DocumentSource, DocumentStatus
-from ..repositories.document_repository import DocumentRepository, create_document_repository
+from ..repositories.document_repository import PostgresDocumentRepository
 from ..services.chunking_service import StructuredChunker
 from ..services.embedding_service import EmbeddingService
 from ..services.rag_service import RAGService
@@ -54,10 +56,10 @@ TASK_SLA_SECONDS = {
 }
 
 
-def get_document_repository() -> DocumentRepository:
-    current_settings = get_settings()
-    # Use service role for background tasks to bypass RLS
-    return create_document_repository(current_settings, use_service_role=True)
+def get_document_repository() -> PostgresDocumentRepository:
+    """Get async document repository with new session"""
+    session = AsyncSessionLocal()
+    return PostgresDocumentRepository(session)
 
 
 @lru_cache(maxsize=1)
@@ -105,7 +107,7 @@ def _check_sla(task_name: str, duration: float, success: bool = True) -> None:
         )
 
 
-def _parse_document(
+async def _parse_document(
     document_id: str,
     user_id: str,
     source_url: Optional[str] = None,
@@ -121,49 +123,71 @@ def _parse_document(
     record_task_started("documents.parse")
     start_time = time.perf_counter()
 
-    document = repo.get(document_id)
-    if not document:
-        logger.error("Document not found", extra={"document_id": document_id})
-        raise ValueError("Document not found")
-
-    repo.mark_status(document_id, DocumentStatus.parsing)
-
     try:
-        elements = _extract_elements(document.source_type, document, source_url)
-        _update_task_progress(task, 30, "已提取元素")
+        document = await repo.get(document_id)
+        if not document:
+            logger.error("Document not found", extra={"document_id": document_id})
+            raise ValueError("Document not found")
 
-        sections = get_chunker().build_sections(elements)
-        chunks = get_chunker().chunk_sections(sections)
-        _update_task_progress(task, 50, "已完成分块")
+        await repo.mark_status(document_id, DocumentStatus.parsing)
 
-        chunks_path = _chunks_path(document_id)
-        get_chunker().serialize_chunks(chunks, chunks_path)
-        _update_task_progress(task, 70, "已生成 chunk 文件")
+        try:
+            loop = asyncio.get_running_loop()
+            
+            # Run CPU-bound/Sync-IO tasks in thread pool
+            elements = await loop.run_in_executor(
+                None, _extract_elements, document.source_type, document, source_url
+            )
+            _update_task_progress(task, 30, "已提取元素")
 
-        get_embedder().embed_chunks(
-            document_id=document_id,
-            user_id=user_id,
-            chunks_file=chunks_path,
-        )
-        _update_task_progress(task, 90, "向量入库完成")
+            # Try to extract title from elements
+            title = None
+            for element in elements:
+                if element.get("category") == "Title":
+                    title = element.get("text", "").strip()
+                    if title:
+                        break
+            
+            if title:
+                await repo.update_title(document_id, title)
 
-        repo.mark_status(document_id, DocumentStatus.completed)
-        _update_task_progress(task, 100, "解析完成")
-        logger.info("Completed parse_document_task", extra={"document_id": document_id})
-        duration = time.perf_counter() - start_time
-        record_task_completed("documents.parse", duration)
-        _check_sla("documents.parse", duration)
-    except Exception as exc:
-        logger.exception("Failed to parse document", extra={"document_id": document_id})
-        repo.mark_status(document_id, DocumentStatus.failed, str(exc))
-        _update_task_progress(task, 100, "解析失败")
-        _refund_on_failure(user_id, sku, str(exc))
-        duration = time.perf_counter() - start_time
-        record_task_failed("documents.parse", duration, str(exc))
-        _check_sla("documents.parse", duration, success=False)
-        setattr(exc, "credits_refunded", True)
-        raise
+            chunker = get_chunker()
+            sections = await loop.run_in_executor(None, chunker.build_sections, elements)
+            chunks = await loop.run_in_executor(None, chunker.chunk_sections, sections)
+            _update_task_progress(task, 50, "已完成分块")
+
+            chunks_path = _chunks_path(document_id)
+            await loop.run_in_executor(None, chunker.serialize_chunks, chunks, chunks_path)
+            _update_task_progress(task, 70, "已生成 chunk 文件")
+
+            embedder = get_embedder()
+            await loop.run_in_executor(
+                None,
+                embedder.embed_chunks,
+                document_id,
+                user_id,
+                chunks_path,
+            )
+            _update_task_progress(task, 90, "向量入库完成")
+
+            await repo.mark_status(document_id, DocumentStatus.completed)
+            _update_task_progress(task, 100, "解析完成")
+            logger.info("Completed parse_document_task", extra={"document_id": document_id})
+            duration = time.perf_counter() - start_time
+            record_task_completed("documents.parse", duration)
+            _check_sla("documents.parse", duration)
+        except Exception as exc:
+            logger.exception("Failed to parse document", extra={"document_id": document_id})
+            await repo.mark_status(document_id, DocumentStatus.failed, str(exc))
+            _update_task_progress(task, 100, "解析失败")
+            _refund_on_failure(user_id, sku, str(exc))
+            duration = time.perf_counter() - start_time
+            record_task_failed("documents.parse", duration, str(exc))
+            _check_sla("documents.parse", duration, success=False)
+            setattr(exc, "credits_refunded", True)
+            raise
     finally:
+        await repo.session.close()
         clear_context()
 
 
@@ -203,60 +227,74 @@ def _update_task_progress(task: Optional[Task], progress: int, message: str) -> 
         logger.debug("Failed to update task progress", exc_info=True)
 
 
-def _execute_analysis_workflow(document_id: str, user_id: str) -> Dict:
+async def _execute_analysis_workflow(document_id: str, user_id: str) -> Dict:
     bind_document_context(document_id)
     repo = get_document_repository()
-    document = repo.get(document_id)
-    if not document or document.user_id != user_id:
-        raise ValueError("Document not found or access denied")
-    record_task_started("analysis.generate")
-    start_time = time.perf_counter()
-
-    rag_service = get_rag_service()
-    openai_client = get_openai_client()
-
-    planner = make_generate_sub_queries(openai_client)
-    retriever = make_retrieve_all_contexts(rag_service)
-    analyze_fn = make_analyze_dimension(openai_client)
-    analyzers = make_dimension_analyzers(analyze_fn)
-    synthesizer = make_synthesize_final_report(openai_client)
-
-    state: AnalysisState = {
-        "document_id": document_id,
-        "user_id": user_id,
-        "dimensions": list(DEFAULT_DIMENSIONS),
-        "sub_queries": {},
-        "retrieved_contexts": {},
-        "analysis_results": {},
-    }
-
     try:
-        state.update(planner(state))
-        state.update(retriever(state))
-        for key in ["analyze_tech", "analyze_econ", "analyze_team", "analyze_risk"]:
-            result = analyzers[key](state)
-            state.update(result)
-        final = synthesizer(state)
-        if not final or "final_report" not in final:
-            raise RuntimeError("Failed to synthesize analysis report")
+        document = await repo.get(document_id)
+        if not document or document.user_id != user_id:
+            raise ValueError("Document not found or access denied")
+        record_task_started("analysis.generate")
+        start_time = time.perf_counter()
 
-        result = final["final_report"]
-        rag_service.cache.set_json(
-            analysis_cache_key(document_id),
-            result,
-            ttl=ANALYSIS_CACHE_TTL,
-            layer="analysis",
-        )
-        duration = time.perf_counter() - start_time
-        record_task_completed("analysis.generate", duration)
-        _check_sla("analysis.generate", duration)
-        return result
-    except Exception as exc:
-        duration = time.perf_counter() - start_time
-        record_task_failed("analysis.generate", duration, str(exc))
-        _check_sla("analysis.generate", duration, success=False)
-        raise
+        rag_service = get_rag_service()
+        openai_client = get_openai_client()
+
+        planner = make_generate_sub_queries(openai_client)
+        retriever = make_retrieve_all_contexts(rag_service)
+        analyze_fn = make_analyze_dimension(openai_client)
+        analyzers = make_dimension_analyzers(analyze_fn)
+        synthesizer = make_synthesize_final_report(openai_client)
+
+        state: AnalysisState = {
+            "document_id": document_id,
+            "user_id": user_id,
+            "dimensions": list(DEFAULT_DIMENSIONS),
+            "sub_queries": {},
+            "retrieved_contexts": {},
+            "analysis_results": {},
+        }
+
+        try:
+            loop = asyncio.get_running_loop()
+            
+            # Planner
+            plan_update = await loop.run_in_executor(None, planner, state)
+            state.update(plan_update)
+            
+            # Retriever
+            retrieve_update = await loop.run_in_executor(None, retriever, state)
+            state.update(retrieve_update)
+            
+            # Analyzers
+            for key in ["analyze_tech", "analyze_econ", "analyze_team", "analyze_risk"]:
+                result = await loop.run_in_executor(None, analyzers[key], state)
+                state.update(result)
+                
+            # Synthesizer
+            final = await loop.run_in_executor(None, synthesizer, state)
+            
+            if not final or "final_report" not in final:
+                raise RuntimeError("Failed to synthesize analysis report")
+
+            result = final["final_report"]
+            rag_service.cache.set_json(
+                analysis_cache_key(document_id),
+                result,
+                ttl=ANALYSIS_CACHE_TTL,
+                layer="analysis",
+            )
+            duration = time.perf_counter() - start_time
+            record_task_completed("analysis.generate", duration)
+            _check_sla("analysis.generate", duration)
+            return result
+        except Exception as exc:
+            duration = time.perf_counter() - start_time
+            record_task_failed("analysis.generate", duration, str(exc))
+            _check_sla("analysis.generate", duration, success=False)
+            raise
     finally:
+        await repo.session.close()
         clear_context()
 
 
@@ -276,6 +314,7 @@ def _dispatch_task(task_callable, task_name: str, priority: TaskPriority, *args,
 
 
 if celery_app:
+    import asyncio
 
     @celery_app.task(name="documents.parse", bind=True)
     def parse_document_task(
@@ -285,7 +324,15 @@ if celery_app:
         source_url: Optional[str] = None,
         sku: str = DEFAULT_PARSE_SKU,
     ) -> None:
-        _parse_document(document_id, user_id, source_url, sku=sku, task=self)
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+
+        if loop:
+            loop.create_task(_parse_document(document_id, user_id, source_url, sku=sku, task=self))
+        else:
+            asyncio.run(_parse_document(document_id, user_id, source_url, sku=sku, task=self))
 
     @celery_app.task(name="analysis.generate", bind=True)
     def generate_analysis_task(
@@ -297,7 +344,19 @@ if celery_app:
         _update_task_progress(self, 0, "开始分析")
         try:
             bind_task_context(getattr(self.request, "id", None))
-            report = _execute_analysis_workflow(document_id, user_id)
+            
+            try:
+                loop = asyncio.get_running_loop()
+            except RuntimeError:
+                loop = None
+
+            if loop:
+                # If we are in a loop (e.g. inline execution), we return the coroutine
+                # The caller (enqueue_generate_analysis) must await it
+                return _execute_analysis_workflow(document_id, user_id)
+            else:
+                report = asyncio.run(_execute_analysis_workflow(document_id, user_id))
+                
             _update_task_progress(self, 100, "分析完成")
             return report
         except Exception as exc:
@@ -306,6 +365,7 @@ if celery_app:
             raise
 
 else:
+    import asyncio
 
     def parse_document_task(
         document_id: str,
@@ -313,7 +373,15 @@ else:
         source_url: Optional[str] = None,
         sku: str = DEFAULT_PARSE_SKU,
     ) -> None:
-        _parse_document(document_id, user_id, source_url, sku=sku, task=None)
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+
+        if loop:
+            loop.create_task(_parse_document(document_id, user_id, source_url, sku=sku, task=None))
+        else:
+            asyncio.run(_parse_document(document_id, user_id, source_url, sku=sku, task=None))
 
     def generate_analysis_task(
         document_id: str,
@@ -321,7 +389,15 @@ else:
         sku: str = ANALYSIS_SKU,
     ) -> Dict:
         try:
-            return _execute_analysis_workflow(document_id, user_id)
+            try:
+                loop = asyncio.get_running_loop()
+            except RuntimeError:
+                loop = None
+            
+            if loop:
+                return _execute_analysis_workflow(document_id, user_id)
+            else:
+                return asyncio.run(_execute_analysis_workflow(document_id, user_id))
         except Exception as exc:
             _refund_on_failure(user_id, sku, str(exc))
             raise
@@ -347,7 +423,7 @@ def enqueue_parse_document(
     )
 
 
-def enqueue_generate_analysis(
+async def enqueue_generate_analysis(
     document_id: str,
     user_id: str,
     *,
@@ -365,5 +441,10 @@ def enqueue_generate_analysis(
             sku,
         )
         return None
-    return generate_analysis_task(document_id, user_id, sku)
+    
+    # Inline execution
+    result = generate_analysis_task(document_id, user_id, sku)
+    if asyncio.iscoroutine(result):
+        return await result
+    return result
 

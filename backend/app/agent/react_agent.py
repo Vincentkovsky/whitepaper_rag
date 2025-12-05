@@ -20,6 +20,7 @@ Requirements:
 import json
 import logging
 import time
+from datetime import datetime
 from typing import Any, AsyncIterator, Dict, List, Optional
 
 from openai import OpenAI
@@ -40,6 +41,9 @@ from .types import (
 from .router import IntentRouter
 from .tools.registry import ToolRegistry, ToolNotFoundError
 from ..core.config import get_settings
+
+
+from .prompts import REACT_AGENT_SYSTEM_PROMPT
 
 
 logger = logging.getLogger(__name__)
@@ -72,29 +76,9 @@ class ReActAgent:
         >>> print(response.answer)
     """
     
-    # System prompt for the ReAct agent
-    SYSTEM_PROMPT = """You are a helpful AI assistant that can use tools to answer questions.
+    # System prompt is now centralized in prompts.py
+    SYSTEM_PROMPT = REACT_AGENT_SYSTEM_PROMPT
 
-You follow the ReAct pattern: Think step by step, then decide whether to use a tool or provide a final answer.
-
-Available tools:
-{tools_description}
-
-For each step, respond in JSON format:
-{{
-    "thought": "Your reasoning about what to do next",
-    "action": "tool_name" or null if ready to answer,
-    "action_input": {{"param1": "value1"}} or null if no action,
-    "final_answer": "Your final answer" or null if not ready
-}}
-
-Guidelines:
-- Always think before acting
-- Use tools when you need information from documents or the web
-- If you have enough information, provide a final_answer
-- Be concise but thorough in your reasoning
-- If a tool fails, try to work with available information
-- Synthesize information from multiple tool calls into a coherent answer"""
 
     def __init__(
         self,
@@ -446,7 +430,13 @@ Guidelines:
         user_id: str,
     ) -> List[Dict[str, str]]:
         """Build the initial conversation history for the agent."""
-        system_prompt = self.SYSTEM_PROMPT.format(tools_description=tools_description)
+        # Inject current_date for Time Anchor (prevents temporal hallucinations)
+        # Use date only (not time) to maximize Prefix Caching effectiveness
+        current_date = datetime.now().strftime("%Y-%m-%d")
+        system_prompt = self.SYSTEM_PROMPT.format(
+            tools_description=tools_description,
+            current_date=current_date,
+        )
         
         # Add context for the agent
         context = f"""

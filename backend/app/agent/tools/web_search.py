@@ -141,6 +141,7 @@ def create_web_search_tool(
     def web_search(
         query: str,
         max_results: int = 5,
+        **kwargs: Any,
     ) -> List[Dict[str, Any]]:
         """Search the web for information.
         
@@ -182,7 +183,11 @@ def create_web_search_tool(
         description=(
             "Search the web for real-time information not present in the documents. "
             "Use this tool when you need current information, facts from the internet, "
-            "or when the document doesn't contain the needed information."
+            "or when the document doesn't contain the needed information. "
+            "Fuzzy Data Processing Principle: If precise historical data (e.g., 'exactly one year ago') "
+            "is not available after 2-3 search attempts, DO NOT keep searching. "
+            "Instead, use the closest available data point (e.g., 'early 2023' or 'last reported figure') "
+            "and explicitly state this approximation in your final answer."
         ),
         parameters={
             "type": "object",

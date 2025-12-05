@@ -74,6 +74,7 @@ class Settings(BaseSettings):
     agent_max_steps: int = 10  # Maximum reasoning steps for agent
     router_confidence_threshold: float = 0.8  # Confidence threshold for intent classification
     tavily_api_key: Optional[str] = None  # API key for Tavily web search
+    serpapi_key: Optional[str] = None  # API key for SerpApi web search
 
     model_config = SettingsConfigDict(
         env_file=".env",

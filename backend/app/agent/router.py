@@ -22,6 +22,10 @@ except ImportError:  # pragma: no cover
 
 from .types import IntentClassification, IntentType
 from ..core.config import get_settings
+from .prompts import (
+    INTENT_CLASSIFICATION_SYSTEM_PROMPT,
+    INTENT_CLASSIFICATION_USER_TEMPLATE,
+)
 
 
 class IntentRouter:
@@ -229,28 +233,9 @@ class IntentRouter:
             IntentClassification from LLM analysis
         """
         # Build the classification prompt
-        system_prompt = """You are an intent classifier. Classify the user's query into one of these categories:
+        system_prompt = INTENT_CLASSIFICATION_SYSTEM_PROMPT
 
-1. DIRECT_ANSWER - Simple greetings, small talk, self-contained questions that don't need external information
-2. DOCUMENT_QA - Questions that require searching/retrieving information from uploaded documents
-3. WEB_SEARCH - Questions that require real-time information from the web (news, current events, live data)
-4. COMPLEX_REASONING - Multi-part questions that require breaking down into sub-questions and multiple steps
-
-Respond in JSON format:
-{
-    "intent": "DIRECT_ANSWER" | "DOCUMENT_QA" | "WEB_SEARCH" | "COMPLEX_REASONING",
-    "confidence": 0.0-1.0,
-    "reasoning": "Brief explanation"
-}
-
-Guidelines:
-- Greetings like "hello", "你好", "how are you" → DIRECT_ANSWER
-- Questions about document content → DOCUMENT_QA
-- Questions about current events, weather, stock prices → WEB_SEARCH
-- Questions with multiple parts or requiring analysis → COMPLEX_REASONING
-- When uncertain, prefer DOCUMENT_QA over DIRECT_ANSWER"""
-
-        user_prompt = f"Classify this query: {query}"
+        user_prompt = INTENT_CLASSIFICATION_USER_TEMPLATE.format(query=query)
         
         if context:
             user_prompt += f"\n\nContext: {context}"

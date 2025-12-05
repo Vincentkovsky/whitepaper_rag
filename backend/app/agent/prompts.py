@@ -1,198 +1,85 @@
 """
-Configurable prompt templates for the Agentic RAG system.
+Centralized prompt templates for the Agentic RAG system.
 
-This module provides a PromptTemplate class that allows customization of
-system and user prompts, replacing hardcoded domain-specific prompts.
+This module provides configurable prompts for the ReAct Agent and Intent Router.
 
-**Requirements: 4.3**
+OPTIMIZATION STRATEGY:
+- Prefix Caching: Static content first (Role + Tools), Dynamic content last (Date)
+- Time Anchor: Inject current_date to prevent temporal hallucinations
+- Loop Prevention: Explicit "stop after 2-3 attempts" instructions
+- Few-Shot Examples: Improve classification accuracy on edge cases
 """
 
-from typing import Any, Dict, Optional
-from pydantic import BaseModel, Field
+
+# ReAct Agent System Prompt
+# STRATEGY: Static content first (Role + Tools), Dynamic content last (Date + History)
+REACT_AGENT_SYSTEM_PROMPT = """# Role
+You are Prism, an autonomous research agent capable of using tools to answer complex questions.
+
+# Tools Available
+{tools_description}
+
+# Interaction Format
+To solve a problem, you must strictly follow this loop:
+
+**Question**: The input question you must answer.
+**Thought**: Analyze the request. Check the **Current Date** provided below. Plan your next step.
+**Action**: The name of the tool to use (must be one of the available tools).
+**Action Input**: The specific input parameters for the tool (in valid JSON format).
+**Observation**: The result returned by the tool.
+... (Repeat Thought/Action/Observation as needed) ...
+**Final Answer**: The comprehensive answer to the user's question, citing sources if used.
+
+For each step, respond in JSON format:
+{{
+    "thought": "Your reasoning about what to do next",
+    "action": "tool_name" or null if ready to answer,
+    "action_input": {{"param1": "value1"}} or null if no action,
+    "final_answer": "Your final answer" or null if not ready
+}}
+
+# Guidelines
+1. **Reasoning**: Always output a **Thought** before an **Action**.
+2. **Data Freshness**: When searching for "current" or "recent" information, ALWAYS check the **Current Date**. If exact data for today is not available, use the most recent available data and explicitly label it as an estimate.
+3. **Loop Prevention**: Do NOT loop endlessly trying to find "perfect" data. If 2-3 search attempts fail, use the best available information and state the limitation.
+4. **Citations**: If you find information from documents or web searches, reference them clearly in your final answer.
+5. **Synthesis**: Synthesize information from multiple tool calls into a coherent, comprehensive answer.
+
+# Operational Context
+**Current Date**: {current_date}
+"""
 
 
-class PromptTemplate(BaseModel):
-    """
-    A configurable prompt template with customizable system and user prompts.
-    
-    This class allows injection of custom prompts into the RAG pipeline,
-    enabling domain-agnostic operation by replacing hardcoded prompts.
-    """
-    
-    name: str = Field(
-        description="Unique identifier for the template"
-    )
-    description: str = Field(
-        default="",
-        description="Human-readable description of the template's purpose"
-    )
-    system_prompt: str = Field(
-        description="The system prompt that sets the assistant's behavior"
-    )
-    user_prompt_template: str = Field(
-        description="The user prompt template with placeholders for context and question"
-    )
-    
-    def format_user_prompt(self, context: str, question: str, **kwargs: Any) -> str:
-        """
-        Format the user prompt template with the given context and question.
-        
-        Args:
-            context: The retrieved context from documents
-            question: The user's question
-            **kwargs: Additional variables to substitute in the template
-            
-        Returns:
-            The formatted user prompt string
-        """
-        return self.user_prompt_template.format(
-            context=context,
-            question=question,
-            **kwargs
-        )
-    
-    def format_full_prompt(self, context: str, question: str, **kwargs: Any) -> str:
-        """
-        Format the complete prompt combining system and user prompts.
-        
-        This is useful for models that don't support separate system/user messages.
-        
-        Args:
-            context: The retrieved context from documents
-            question: The user's question
-            **kwargs: Additional variables to substitute in the template
-            
-        Returns:
-            The complete formatted prompt string
-        """
-        user_prompt = self.format_user_prompt(context, question, **kwargs)
-        return f"{self.system_prompt}\n\n{user_prompt}"
+# Intent Classification Prompts
+# STRATEGY: Few-Shot Prompting to improve accuracy on edge cases
+INTENT_CLASSIFICATION_SYSTEM_PROMPT = """You are the Intent Classifier for the Prism AI system.
+Your job is to categorize user queries into specific execution paths.
 
+# Intent Categories
+1. **DIRECT_ANSWER**: Greetings, small talk, compliments, or questions about your identity.
+2. **DOCUMENT_QA**: Questions about specific files, uploaded content, or domain-specific terminology.
+3. **WEB_SEARCH**: Questions about current events, news, real-time data, or public entities.
+4. **COMPLEX_REASONING**: Multi-step tasks, comparative analysis, or requests requiring BOTH internal documents and external web info.
 
-# Default general-purpose template for document Q&A
-DEFAULT_QA_TEMPLATE = PromptTemplate(
-    name="default_qa",
-    description="Default general-purpose template for document question answering",
-    system_prompt=(
-        "You are a helpful document assistant. Answer questions based on the provided context. "
-        "If the information is not in the context, say so clearly."
-    ),
-    user_prompt_template=(
-        "Context:\n{context}\n\n"
-        "Question: {question}\n\n"
-        "Please provide a concise and accurate answer based on the context above."
-    )
-)
+# Few-Shot Examples (Follow these patterns)
+User: "Hello, how are you?"
+Result: {{"intent": "DIRECT_ANSWER", "confidence": 1.0, "reasoning": "Greeting"}}
 
+User: "Summarize the risk factors in the uploaded audit report."
+Result: {{"intent": "DOCUMENT_QA", "confidence": 0.95, "reasoning": "Explicit reference to uploaded report"}}
 
-# Chinese language template for document Q&A
-CHINESE_QA_TEMPLATE = PromptTemplate(
-    name="chinese_qa",
-    description="Chinese language template for document question answering",
-    system_prompt=(
-        "你是一个专业的文档助手。请根据提供的上下文回答问题。"
-        "如果上下文中没有相关信息，请明确说明。"
-    ),
-    user_prompt_template=(
-        "上下文：\n{context}\n\n"
-        "问题：{question}\n\n"
-        "请根据上下文提供简洁准确的答案。"
-    )
-)
+User: "What is the current price of Bitcoin?"
+Result: {{"intent": "WEB_SEARCH", "confidence": 0.95, "reasoning": "Real-time market data request"}}
 
+User: "Compare the revenue growth in this PDF with Apple's latest quarterly results."
+Result: {{"intent": "COMPLEX_REASONING", "confidence": 0.9, "reasoning": "Requires combining PDF analysis with external web search"}}
 
-class PromptTemplateRegistry:
-    """
-    Registry for managing prompt templates.
-    
-    Allows registration and retrieval of prompt templates by name,
-    with a default fallback template.
-    """
-    
-    def __init__(self, default_template: Optional[PromptTemplate] = None):
-        """
-        Initialize the registry with an optional default template.
-        
-        Args:
-            default_template: The template to use when no specific template is requested.
-                            Defaults to DEFAULT_QA_TEMPLATE.
-        """
-        self._templates: Dict[str, PromptTemplate] = {}
-        self._default_template = default_template or DEFAULT_QA_TEMPLATE
-        
-        # Register built-in templates
-        self.register(DEFAULT_QA_TEMPLATE)
-        self.register(CHINESE_QA_TEMPLATE)
-    
-    def register(self, template: PromptTemplate) -> None:
-        """
-        Register a prompt template.
-        
-        Args:
-            template: The template to register
-        """
-        self._templates[template.name] = template
-    
-    def get(self, name: str) -> Optional[PromptTemplate]:
-        """
-        Get a template by name.
-        
-        Args:
-            name: The template name
-            
-        Returns:
-            The template if found, None otherwise
-        """
-        return self._templates.get(name)
-    
-    def get_or_default(self, name: Optional[str] = None) -> PromptTemplate:
-        """
-        Get a template by name, falling back to the default if not found.
-        
-        Args:
-            name: The template name, or None to get the default
-            
-        Returns:
-            The requested template or the default template
-        """
-        if name is None:
-            return self._default_template
-        return self._templates.get(name, self._default_template)
-    
-    def list_templates(self) -> Dict[str, PromptTemplate]:
-        """
-        List all registered templates.
-        
-        Returns:
-            Dictionary of template name to template
-        """
-        return dict(self._templates)
-    
-    def set_default(self, template: PromptTemplate) -> None:
-        """
-        Set the default template.
-        
-        Args:
-            template: The template to use as default
-        """
-        self._default_template = template
-        # Also register it if not already registered
-        if template.name not in self._templates:
-            self.register(template)
+# Output Format
+You must respond with a valid JSON object only:
+{{
+    "intent": "CATEGORY_NAME",
+    "confidence": <float 0.0-1.0>,
+    "reasoning": "Brief explanation"
+}}"""
 
-
-# Global registry instance
-_global_registry: Optional[PromptTemplateRegistry] = None
-
-
-def get_prompt_registry() -> PromptTemplateRegistry:
-    """
-    Get the global prompt template registry.
-    
-    Returns:
-        The global PromptTemplateRegistry instance
-    """
-    global _global_registry
-    if _global_registry is None:
-        _global_registry = PromptTemplateRegistry()
-    return _global_registry
+INTENT_CLASSIFICATION_USER_TEMPLATE = "Classify this query: {query}"

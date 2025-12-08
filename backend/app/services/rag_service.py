@@ -157,30 +157,36 @@ class RAGService:
     def get_relevant_chunks(
         self,
         question: str,
-        document_id: str,
+        document_id: Optional[str],
         user_id: str,
         k: int = 10,
     ) -> List[Dict]:
-        bind_document_context(document_id)
-        cache_key = chunks_cache_key(document_id, question)
+        # Only bind document context if we have a specific document
+        if document_id:
+            bind_document_context(document_id)
+        
+        cache_key = chunks_cache_key(document_id or "all_docs", question)
         cached_chunks = self._cache_get_json(cache_key, layer="chunks")
         if cached_chunks:
             self.logger.debug(
                 "Chunk cache hit",
-                extra={"document_id": document_id, "user_id": user_id, "results": len(cached_chunks)},
+                extra={"document_id": document_id or "all", "user_id": user_id, "results": len(cached_chunks)},
             )
             return cached_chunks
 
         embedding = self._embed_question(question)
         start = time.perf_counter()
+        
+        # Build where clause - filter by user_id, optionally by document_id
+        where_conditions = [{"user_id": {"$eq": user_id}}]
+        if document_id:
+            where_conditions.append({"document_id": {"$eq": document_id}})
+        
+        where_clause = {"$and": where_conditions} if len(where_conditions) > 1 else where_conditions[0]
+        
         results = self.collection.query(
             query_embeddings=[embedding],
-            where={
-                "$and": [
-                    {"user_id": {"$eq": user_id}},
-                    {"document_id": {"$eq": document_id}},
-                ]
-            },
+            where=where_clause,
             n_results=k,
             include=["documents", "metadatas", "distances"],
         )
@@ -200,7 +206,7 @@ class RAGService:
         self.logger.info(
             "Vector search completed",
             extra={
-                "document_id": document_id,
+                "document_id": document_id or "all",
                 "user_id": user_id,
                 "results": len(chunks),
                 "duration_ms": round(duration * 1000, 2),

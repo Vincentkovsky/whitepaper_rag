@@ -1,5 +1,9 @@
-from backend.app.services.cache_service import CacheService
-from backend.app.services.rag_service import RAGService
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from app.services.cache_service import CacheService
+from app.services.rag_service import RAGService
 from .test_cache_service import FakeRedis  # reuse stub
 
 

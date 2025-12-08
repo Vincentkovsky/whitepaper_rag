@@ -1,0 +1,41 @@
+name: default
+description: General-purpose document analysis template suitable for any document type
+dimensions:
+  - summary
+  - key_points
+  - questions
+prompts:
+  summary: |
+    Please provide a comprehensive summary of the document.
+    Focus on the main themes, arguments, and conclusions.
+    Keep the summary concise but informative.
+  key_points: |
+    Extract the key points from the document.
+    List the most important facts, findings, or arguments.
+    Present them in a clear, bullet-point format.
+  questions: |
+    Generate thoughtful questions that a reader might have after reading this document.
+    Include questions about:
+    - Clarifications needed
+    - Implications of the content
+    - Related topics to explore
+output_schema:
+  type: object
+  properties:
+    summary:
+      type: string
+      description: A comprehensive summary of the document
+    key_points:
+      type: array
+      items:
+        type: string
+      description: List of key points extracted from the document
+    questions:
+      type: array
+      items:
+        type: string
+      description: List of questions generated from the document
+  required:
+    - summary
+    - key_points
+    - questions

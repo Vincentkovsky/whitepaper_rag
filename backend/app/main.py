@@ -1,5 +1,6 @@
 from fastapi import FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.sessions import SessionMiddleware
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 
 try:  # pragma: no cover - optional dependency
@@ -9,7 +10,7 @@ except ImportError:  # pragma: no cover
     sentry_init = None
     FastApiIntegration = None
 
-from .api.routes import auth, documents, subscription, qa
+from .api.routes import auth, documents, subscription, qa, agent, admin
 from .core.config import get_settings
 from .logging_utils import setup_logging
 from .middleware.logging_middleware import RequestLoggingMiddleware
@@ -28,6 +29,9 @@ def create_app() -> FastAPI:
 
     app = FastAPI(title=settings.app_name)
 
+    # Add SessionMiddleware for OAuth (must be added before other middleware)
+    app.add_middleware(SessionMiddleware, secret_key=settings.jwt_secret_key)
+
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],
@@ -41,6 +45,8 @@ def create_app() -> FastAPI:
     app.include_router(documents.router)
     app.include_router(subscription.router)
     app.include_router(qa.router)
+    app.include_router(agent.router)
+    app.include_router(admin.router)
 
     @app.get("/health")
     async def health():

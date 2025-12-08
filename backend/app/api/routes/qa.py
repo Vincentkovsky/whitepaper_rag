@@ -85,7 +85,7 @@ async def generate_analysis(
         )
     priority = TaskPriority.PREMIUM if current_user.is_subscriber else TaskPriority.STANDARD
     try:
-        result = dispatch_analysis(payload.document_id, current_user.id, priority=priority, sku=sku)
+        result = await dispatch_analysis(payload.document_id, current_user.id, priority=priority, sku=sku)
     except Exception as exc:
         subscription.refund_credits(current_user.id, sku, reason="analysis_failed")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc

@@ -21,19 +21,20 @@ class Settings(BaseSettings):
     # Storage
     storage_base_path: Path = Path("backend/app/storage/uploads")
 
-    # Supabase
-    supabase_url: Optional[AnyHttpUrl] = Field(
-        default=None,
-        validation_alias=AliasChoices("VITE_SUPABASE_URL", "SUPABASE_URL"),
+    # Database
+    database_url: str = Field(
+        default="postgresql+asyncpg://postgres:postgres@localhost:5432/prism",
+        validation_alias="DATABASE_URL"
     )
-    supabase_anon_key: Optional[str] = Field(
-        default=None,
-        validation_alias=AliasChoices("VITE_SUPABASE_ANON_KEY", "SUPABASE_ANON_KEY"),
-    )
-    supabase_service_role_key: Optional[str] = Field(
-        default=None,
-        validation_alias=AliasChoices("SUPABASE_SERVICE_ROLE_KEY"),
-    )
+
+    # JWT Authentication
+    jwt_secret_key: str = Field(default="changeme", validation_alias="JWT_SECRET_KEY")
+    jwt_algorithm: str = "HS256"
+    access_token_expire_minutes: int = 60 * 24 * 7  # 7 days
+
+    # Google OAuth
+    google_client_id: Optional[str] = Field(default=None, validation_alias="GOOGLE_CLIENT_ID")
+    google_client_secret: Optional[str] = Field(default=None, validation_alias="GOOGLE_CLIENT_SECRET")
 
     # OpenAI / Gemini
     openai_api_key: Optional[str] = None
@@ -67,9 +68,18 @@ class Settings(BaseSettings):
     run_tasks_inline: bool = True
     document_pipeline_enabled: bool = True
 
+    # Agent configuration
+    vector_weight: float = 0.7  # Weight for vector search in hybrid retrieval
+    bm25_weight: float = 0.3  # Weight for BM25 search in hybrid retrieval
+    agent_max_steps: int = 10  # Maximum reasoning steps for agent
+    router_confidence_threshold: float = 0.8  # Confidence threshold for intent classification
+    tavily_api_key: Optional[str] = None  # API key for Tavily web search
+    serpapi_key: Optional[str] = None  # API key for SerpApi web search
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
+        extra="ignore"
     )
 
 

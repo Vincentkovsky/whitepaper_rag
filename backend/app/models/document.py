@@ -42,5 +42,6 @@ class DocumentListItem(BaseModel):
     id: str
     user_id: str
     title: Optional[str]
+    source_value: str
     status: DocumentStatus
     created_at: str

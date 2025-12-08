@@ -1,186 +1,128 @@
-from __future__ import annotations
-
-import json
-from abc import ABC, abstractmethod
-import logging
+from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import List, Optional
+from uuid import UUID
 
-try:
-    from supabase import Client  # type: ignore
-except ImportError:  # pragma: no cover
-    Client = Any  # type: ignore
+from sqlalchemy import select, and_
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..core.config import Settings
-from ..core.supabase_client import get_supabase_client, get_supabase_service_client
 from ..models.document import Document, DocumentSource, DocumentStatus
 
-
-class DocumentRepository(ABC):
-    @abstractmethod
-    def create(self, document: Document) -> Document: ...
-
-    @abstractmethod
-    def update(self, document_id: str, **fields) -> Optional[Document]: ...
-
-    @abstractmethod
-    def get(self, document_id: str) -> Optional[Document]: ...
-
-    @abstractmethod
-    def list_by_user(self, user_id: str) -> List[Document]: ...
-
-    @abstractmethod
-    def mark_status(self, document_id: str, status: DocumentStatus, error_message: str | None = None) -> Optional[Document]: ...
-
-    @abstractmethod
-    def delete(self, document_id: str) -> None: ...
-
-    def set_access_token(self, token: Optional[str]) -> None:
-        """Optionally override to inject per-request auth."""
-        return None
+# SQLAlchemy ORM model
+from sqlalchemy import Column, String, DateTime, Text, ForeignKey
+from sqlalchemy.dialects.postgresql import UUID as PGUUID
+from sqlalchemy.sql import func
+from ..core.database import Base
 
 
-class LocalDocumentRepository(DocumentRepository):
-    """JSON-file repository used for local dev and tests."""
+class DocumentModel(Base):
+    """Document ORM model for PostgreSQL"""
+    __tablename__ = "documents"
 
-    def __init__(self, store_path: Path):
-        self._store_path = store_path
-        self._store_path.parent.mkdir(parents=True, exist_ok=True)
-        if not self._store_path.exists():
-            self._store_path.write_text("{}", encoding="utf-8")
+    id = Column(String(36), primary_key=True)
+    user_id = Column(PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    source_type = Column(String(20), nullable=False)
+    source_value = Column(Text, nullable=False)
+    storage_path = Column(Text, nullable=True)
+    title = Column(String(500), nullable=True)
+    status = Column(String(20), nullable=False, default="pending", index=True)
+    error_message = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False, index=True)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
-    def _load(self) -> Dict[str, Dict]:
-        return json.loads(self._store_path.read_text(encoding="utf-8"))
 
-    def _save(self, data: Dict[str, Dict]) -> None:
-        self._store_path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+class PostgresDocumentRepository:
+    """PostgreSQL implementation of document repository"""
 
-    def create(self, document: Document) -> Document:
-        data = self._load()
-        data[document.id] = self._serialize(document)
-        self._save(data)
+    def __init__(self, session: AsyncSession):
+        self.session = session
+
+    async def create(self, document: Document) -> Document:
+        """Create a new document"""
+        db_doc = DocumentModel(
+            id=document.id,
+            user_id=UUID(document.user_id),
+            source_type=document.source_type.value,
+            source_value=str(document.source_value),
+            storage_path=str(document.storage_path) if document.storage_path else None,
+            title=document.title,
+            status=document.status.value,
+            error_message=document.error_message,
+            created_at=datetime.fromisoformat(document.created_at) if document.created_at else None,
+            updated_at=datetime.fromisoformat(document.updated_at) if document.updated_at else None,
+        )
+        self.session.add(db_doc)
+        await self.session.commit()
+        await self.session.refresh(db_doc)
         return document
 
-    def update(self, document_id: str, **fields) -> Optional[Document]:
-        data = self._load()
-        if document_id not in data:
+    async def get(self, document_id: str) -> Optional[Document]:
+        """Get document by ID"""
+        result = await self.session.execute(
+            select(DocumentModel).where(DocumentModel.id == document_id)
+        )
+        db_doc = result.scalar_one_or_none()
+        if not db_doc:
             return None
-        data[document_id].update(fields)
-        self._save(data)
-        return Document(**data[document_id])
+        return self._to_domain(db_doc)
 
-    def get(self, document_id: str) -> Optional[Document]:
-        data = self._load()
-        entry = data.get(document_id)
-        return Document(**entry) if entry else None
-
-    def list_by_user(self, user_id: str) -> List[Document]:
-        data = self._load()
-        return [Document(**doc) for doc in data.values() if doc["user_id"] == user_id]
-
-    def mark_status(self, document_id: str, status: DocumentStatus, error_message: str | None = None) -> Optional[Document]:
-        return self.update(document_id, status=status.value, error_message=error_message)
-
-    def delete(self, document_id: str) -> None:
-        data = self._load()
-        if document_id in data:
-            data.pop(document_id)
-            self._save(data)
-
-    def set_access_token(self, token: Optional[str]) -> None:
-        return None
-
-    def _serialize(self, document: Document) -> Dict:
-        payload = document.model_dump()
-        if document.storage_path:
-            payload["storage_path"] = str(document.storage_path)
-        return payload
-
-
-class SupabaseDocumentRepository(DocumentRepository):
-    def __init__(self, client: Client, table: str = "documents"):
-        self.client = client
-        self.table = table
-        self._default_token = getattr(client, "supabase_key", None)
-
-    def create(self, document: Document) -> Document:
-        payload = self._serialize(document)
-        self.client.table(self.table).insert(payload).execute()
-        return document
-
-    def update(self, document_id: str, **fields) -> Optional[Document]:
-        response = (
-            self.client.table(self.table)
-            .update(fields)
-            .eq("id", document_id)
-            .execute()
+    async def list_by_user(self, user_id: str) -> List[Document]:
+        """List all documents for a user"""
+        result = await self.session.execute(
+            select(DocumentModel)
+            .where(DocumentModel.user_id == UUID(user_id))
+            .order_by(DocumentModel.created_at.desc())
         )
-        return self._row_to_document(response.data[0]) if response.data else None
+        db_docs = result.scalars().all()
+        return [self._to_domain(db_doc) for db_doc in db_docs]
 
-    def get(self, document_id: str) -> Optional[Document]:
-        response = (
-            self.client.table(self.table)
-            .select("*")
-            .eq("id", document_id)
-            .limit(1)
-            .execute()
+    async def delete(self, document_id: str) -> bool:
+        """Delete a document"""
+        result = await self.session.execute(
+            select(DocumentModel).where(DocumentModel.id == document_id)
         )
-        return self._row_to_document(response.data[0]) if response.data else None
+        db_doc = result.scalar_one_or_none()
+        if not db_doc:
+            return False
+        await self.session.delete(db_doc)
+        await self.session.commit()
+        return True
 
-    def list_by_user(self, user_id: str) -> List[Document]:
-        response = self.client.table(self.table).select("*").eq("user_id", user_id).execute()
-        return [self._row_to_document(row) for row in response.data]
+    async def mark_status(
+        self, document_id: str, status: DocumentStatus, error_message: Optional[str] = None
+    ) -> None:
+        """Update document status"""
+        result = await self.session.execute(
+            select(DocumentModel).where(DocumentModel.id == document_id)
+        )
+        db_doc = result.scalar_one_or_none()
+        if db_doc:
+            db_doc.status = status.value
+            if error_message is not None:
+                db_doc.error_message = error_message
+            await self.session.commit()
 
-    def mark_status(self, document_id: str, status: DocumentStatus, error_message: str | None = None) -> Optional[Document]:
-        payload = {"status": status.value, "error_message": error_message}
-        return self.update(document_id, **payload)
+    async def update_title(self, document_id: str, title: str) -> None:
+        """Update document title"""
+        result = await self.session.execute(
+            select(DocumentModel).where(DocumentModel.id == document_id)
+        )
+        db_doc = result.scalar_one_or_none()
+        if db_doc:
+            db_doc.title = title
+            await self.session.commit()
 
-    def delete(self, document_id: str) -> None:
-        self.client.table(self.table).delete().eq("id", document_id).execute()
-
-    def set_access_token(self, token: Optional[str]) -> None:
-        target = token or self._default_token
-        if target:
-            self.client.postgrest.auth(target)
-
-    def _serialize(self, document: Document) -> Dict:
-        payload = document.model_dump()
-        payload["source_type"] = document.source_type.value
-        payload["status"] = document.status.value
-        if document.storage_path:
-            payload["storage_path"] = str(document.storage_path)
-        if isinstance(document.source_value, Path):
-            payload["source_value"] = str(document.source_value)
-        return payload
-
-    def _row_to_document(self, row: Dict) -> Document:
-        storage_path = row.get("storage_path")
+    def _to_domain(self, db_doc: DocumentModel) -> Document:
+        """Convert ORM model to domain model"""
         return Document(
-            id=row["id"],
-            user_id=row["user_id"],
-            source_type=DocumentSource(row["source_type"]),
-            source_value=row["source_value"],
-            storage_path=Path(storage_path) if storage_path else None,
-            title=row.get("title"),
-            status=DocumentStatus(row.get("status", DocumentStatus.uploading.value)),
-            error_message=row.get("error_message"),
-            created_at=row.get("created_at") or "",
-            updated_at=row.get("updated_at") or "",
+            id=db_doc.id,
+            user_id=str(db_doc.user_id),
+            source_type=DocumentSource(db_doc.source_type),
+            source_value=db_doc.source_value,
+            storage_path=Path(db_doc.storage_path) if db_doc.storage_path else None,
+            title=db_doc.title,
+            status=DocumentStatus(db_doc.status),
+            error_message=db_doc.error_message,
+            created_at=db_doc.created_at.isoformat() if db_doc.created_at else None,
+            updated_at=db_doc.updated_at.isoformat() if db_doc.updated_at else None,
         )
-
-
-def create_document_repository(settings: Settings, use_service_role: bool = False) -> DocumentRepository:
-    if settings.supabase_url and settings.supabase_anon_key:
-        try:
-            if use_service_role and settings.supabase_service_role_key:
-                client = get_supabase_service_client()
-            else:
-                client = get_supabase_client()
-            return SupabaseDocumentRepository(client)
-        except RuntimeError:
-            logging.getLogger(__name__).warning(
-                "Supabase client unavailable, falling back to local repository",
-            )
-    store_path = settings.storage_base_path / "documents.json"
-    return LocalDocumentRepository(store_path=store_path)
-

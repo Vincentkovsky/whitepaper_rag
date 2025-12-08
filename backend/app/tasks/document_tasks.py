@@ -7,6 +7,7 @@ from typing import Any, Dict, Optional
 import time
 
 import httpx
+import asyncio
 from openai import OpenAI
 
 try:
@@ -16,9 +17,10 @@ except ImportError:  # pragma: no cover
     Task = Any  # type: ignore
 
 from ..core.config import get_settings
+from ..core.database import AsyncSessionLocal
 from ..logging_utils import bind_document_context, bind_task_context, clear_context
 from ..models.document import DocumentSource, DocumentStatus
-from ..repositories.document_repository import DocumentRepository, create_document_repository
+from ..repositories.document_repository import PostgresDocumentRepository
 from ..services.chunking_service import StructuredChunker
 from ..services.embedding_service import EmbeddingService
 from ..services.rag_service import RAGService
@@ -29,15 +31,6 @@ from ..telemetry.task_metrics import (
     record_task_enqueued,
     record_task_failed,
     record_task_started,
-)
-from ..workflows import (
-    AnalysisState,
-    DEFAULT_DIMENSIONS,
-    make_analyze_dimension,
-    make_dimension_analyzers,
-    make_generate_sub_queries,
-    make_retrieve_all_contexts,
-    make_synthesize_final_report,
 )
 from .priority import TaskPriority, get_task_route
 
@@ -63,10 +56,10 @@ TASK_SLA_SECONDS = {
 }
 
 
-def get_document_repository() -> DocumentRepository:
-    current_settings = get_settings()
-    # Use service role for background tasks to bypass RLS
-    return create_document_repository(current_settings, use_service_role=True)
+def get_document_repository() -> PostgresDocumentRepository:
+    """Get async document repository with new session"""
+    session = AsyncSessionLocal()
+    return PostgresDocumentRepository(session)
 
 
 @lru_cache(maxsize=1)
@@ -114,7 +107,7 @@ def _check_sla(task_name: str, duration: float, success: bool = True) -> None:
         )
 
 
-def _parse_document(
+async def _parse_document(
     document_id: str,
     user_id: str,
     source_url: Optional[str] = None,
@@ -130,51 +123,77 @@ def _parse_document(
     record_task_started("documents.parse")
     start_time = time.perf_counter()
 
-    document = repo.get(document_id)
-    if not document:
-        logger.error("Document not found", extra={"document_id": document_id})
-        raise ValueError("Document not found")
-
-    repo.mark_status(document_id, DocumentStatus.parsing)
-
     try:
-        elements = _extract_elements(document.source_type, document, source_url)
-        _update_task_progress(task, 30, "已提取元素")
+        document = await repo.get(document_id)
+        if not document:
+            logger.error("Document not found", extra={"document_id": document_id})
+            raise ValueError("Document not found")
 
-        sections = get_chunker().build_sections(elements)
-        chunks = get_chunker().chunk_sections(sections)
-        _update_task_progress(task, 50, "已完成分块")
+        await repo.mark_status(document_id, DocumentStatus.parsing)
 
-        chunks_path = _chunks_path(document_id)
-        get_chunker().serialize_chunks(chunks, chunks_path)
-        _update_task_progress(task, 70, "已生成 chunk 文件")
+        try:
+            loop = asyncio.get_running_loop()
+            
+            # Run CPU-bound/Sync-IO tasks in thread pool
+            elements = await loop.run_in_executor(
+                None, _extract_elements, document.source_type, document, source_url
+            )
+            _update_task_progress(task, 30, "已提取元素")
 
-        get_embedder().embed_chunks(
-            document_id=document_id,
-            user_id=user_id,
-            chunks_file=chunks_path,
-        )
-        _update_task_progress(task, 90, "向量入库完成")
+            # Try to extract title from elements
+            title = None
+            for element in elements:
+                if element.get("category") == "Title":
+                    title = element.get("text", "").strip()
+                    if title:
+                        break
+            
+            if title:
+                await repo.update_title(document_id, title)
 
-        repo.mark_status(document_id, DocumentStatus.completed)
-        _update_task_progress(task, 100, "解析完成")
-        logger.info("Completed parse_document_task", extra={"document_id": document_id})
-        duration = time.perf_counter() - start_time
-        record_task_completed("documents.parse", duration)
-        _check_sla("documents.parse", duration)
-    except Exception as exc:
-        logger.exception("Failed to parse document", extra={"document_id": document_id})
-        repo.mark_status(document_id, DocumentStatus.failed, str(exc))
-        _update_task_progress(task, 100, "解析失败")
-        _refund_on_failure(user_id, sku, str(exc))
-        duration = time.perf_counter() - start_time
-        record_task_failed("documents.parse", duration, str(exc))
-        _check_sla("documents.parse", duration, success=False)
-        setattr(exc, "credits_refunded", True)
-        raise
+            chunker = get_chunker()
+            sections = await loop.run_in_executor(None, chunker.build_sections, elements)
+            chunks = await loop.run_in_executor(None, chunker.chunk_sections, sections)
+            _update_task_progress(task, 50, "已完成分块")
+
+            chunks_path = _chunks_path(document_id)
+            await loop.run_in_executor(None, chunker.serialize_chunks, chunks, chunks_path)
+            _update_task_progress(task, 70, "已生成 chunk 文件")
+
+            embedder = get_embedder()
+            await loop.run_in_executor(
+                None,
+                embedder.embed_chunks,
+                document_id,
+                user_id,
+                chunks_path,
+            )
+            _update_task_progress(task, 90, "向量入库完成")
+
+            await repo.mark_status(document_id, DocumentStatus.completed)
+            _update_task_progress(task, 100, "解析完成")
+            logger.info("Completed parse_document_task", extra={"document_id": document_id})
+            duration = time.perf_counter() - start_time
+            record_task_completed("documents.parse", duration)
+            _check_sla("documents.parse", duration)
+        except Exception as exc:
+            logger.exception("Failed to parse document", extra={"document_id": document_id})
+            await repo.mark_status(document_id, DocumentStatus.failed, str(exc))
+            _update_task_progress(task, 100, "解析失败")
+            _refund_on_failure(user_id, sku, str(exc))
+            duration = time.perf_counter() - start_time
+            record_task_failed("documents.parse", duration, str(exc))
+            _check_sla("documents.parse", duration, success=False)
+            setattr(exc, "credits_refunded", True)
+            raise
     finally:
+        await repo.session.close()
         clear_context()
 
+
+import trafilatura
+
+# ... (imports)
 
 def _extract_elements(source_type: DocumentSource, document, source_url: Optional[str]) -> list[Dict]:
     chunker = get_chunker()
@@ -185,18 +204,136 @@ def _extract_elements(source_type: DocumentSource, document, source_url: Optiona
     if source_type == DocumentSource.url:
         url = source_url or document.source_value
         html = _fetch_remote_content(url)
-        return chunker.parse_html(html)
+        text = trafilatura.extract(html, include_comments=False, include_tables=True, no_fallback=True, output_format="markdown")
+        if not text:
+            # Fallback to unstructured parsing if trafilatura fails to extract main content
+            return chunker.parse_html(html)
+        return chunker.parse_plain_text(text)
     return chunker.parse_plain_text(document.source_value)
 
 
+from curl_cffi import requests
+
+# ... (imports)
+
+
+
+
 def _fetch_remote_content(url: str) -> str:
+    """
+    Use curl_cffi to simulate a real browser download and bypass TLS fingerprint detection.
+    Also implements heuristic iframe extraction to find the real content.
+    """
     try:
-        with httpx.Client(timeout=20) as client:
-            response = client.get(url)
-            response.raise_for_status()
-            return response.text
-    except Exception as exc:
-        raise RuntimeError(f"Failed to fetch URL content: {url}") from exc
+        # 1. Fetch the initial page
+        response = requests.get(
+            url,
+            impersonate="chrome120", 
+            headers={
+                "Referer": "https://www.zhihu.com/",
+                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8"
+            },
+            cookies={
+                "d_c0": "AGD8-dummy-device-id" 
+            },
+            timeout=15
+        )
+        
+        if response.status_code != 200:
+            raise RuntimeError(f"Download failed with status {response.status_code}")
+
+        html = response.text
+        
+        # 2. Parse with BeautifulSoup to check for iframes
+        try:
+            from bs4 import BeautifulSoup
+            from urllib.parse import urljoin
+            
+            soup = BeautifulSoup(html, 'html.parser')
+            iframes = soup.find_all('iframe')
+            
+            if not iframes:
+                return html
+                
+            # 3. Heuristic scoring for iframes
+            best_iframe = None
+            max_score = 0
+            
+            for iframe in iframes:
+                src = iframe.get('src')
+                if not src:
+                    continue
+                    
+                score = 0
+                
+                # Heuristic 1: Size attributes
+                width = iframe.get('width')
+                height = iframe.get('height')
+                style = iframe.get('style', '').lower()
+                
+                # Prefer large or full-screen iframes
+                if width and (width == '100%' or (width.isdigit() and int(width) > 800)):
+                    score += 2
+                if height and (height == '100%' or (height.isdigit() and int(height) > 600)):
+                    score += 2
+                if 'width: 100%' in style or 'height: 100%' in style:
+                    score += 2
+                    
+                # Heuristic 2: Keywords in URL
+                src_lower = src.lower()
+                if 'pdf' in src_lower:
+                    score += 3
+                if 'article' in src_lower or 'content' in src_lower:
+                    score += 1
+                if 'viewer' in src_lower:
+                    score += 2
+                    
+                # Heuristic 3: ID/Class names
+                id_attr = iframe.get('id', '').lower()
+                class_attr = str(iframe.get('class', '')).lower()
+                if 'content' in id_attr or 'main' in id_attr or 'article' in id_attr:
+                    score += 2
+                if 'content' in class_attr or 'main' in class_attr:
+                    score += 2
+                
+                # Heuristic 4: Avoid common ad/tracking iframes
+                if 'ads' in src_lower or 'tracker' in src_lower or 'analytics' in src_lower:
+                    score -= 10
+                if 'facebook' in src_lower or 'twitter' in src_lower or 'youtube' in src_lower:
+                    score -= 5
+
+                if score > max_score:
+                    max_score = score
+                    best_iframe = src
+
+            # 4. If a good candidate is found (score > threshold), fetch it
+            if best_iframe and max_score > 0:
+                logger.info(f"Found content iframe with score {max_score}: {best_iframe}")
+                full_url = urljoin(url, best_iframe)
+                
+                iframe_response = requests.get(
+                    full_url,
+                    impersonate="chrome120",
+                    headers={
+                        "Referer": url, # Set referer to the parent page
+                        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                    },
+                    timeout=15
+                )
+                
+                if iframe_response.status_code == 200:
+                    return iframe_response.text
+                    
+        except ImportError:
+            logger.warning("BeautifulSoup not installed, skipping iframe extraction")
+        except Exception as e:
+            logger.warning(f"Iframe extraction failed: {e}")
+
+        return html
+
+    except Exception as e:
+        raise RuntimeError(f"Failed to fetch URL content: {url}. Error: {str(e)}")
 
 
 def _chunks_path(document_id: str) -> Path:
@@ -212,60 +349,74 @@ def _update_task_progress(task: Optional[Task], progress: int, message: str) -> 
         logger.debug("Failed to update task progress", exc_info=True)
 
 
-def _execute_analysis_workflow(document_id: str, user_id: str) -> Dict:
+async def _execute_analysis_workflow(document_id: str, user_id: str) -> Dict:
     bind_document_context(document_id)
     repo = get_document_repository()
-    document = repo.get(document_id)
-    if not document or document.user_id != user_id:
-        raise ValueError("Document not found or access denied")
-    record_task_started("analysis.generate")
-    start_time = time.perf_counter()
-
-    rag_service = get_rag_service()
-    openai_client = get_openai_client()
-
-    planner = make_generate_sub_queries(openai_client)
-    retriever = make_retrieve_all_contexts(rag_service)
-    analyze_fn = make_analyze_dimension(openai_client)
-    analyzers = make_dimension_analyzers(analyze_fn)
-    synthesizer = make_synthesize_final_report(openai_client)
-
-    state: AnalysisState = {
-        "document_id": document_id,
-        "user_id": user_id,
-        "dimensions": list(DEFAULT_DIMENSIONS),
-        "sub_queries": {},
-        "retrieved_contexts": {},
-        "analysis_results": {},
-    }
-
     try:
-        state.update(planner(state))
-        state.update(retriever(state))
-        for key in ["analyze_tech", "analyze_econ", "analyze_team", "analyze_risk"]:
-            result = analyzers[key](state)
-            state.update(result)
-        final = synthesizer(state)
-        if not final or "final_report" not in final:
-            raise RuntimeError("Failed to synthesize analysis report")
+        document = await repo.get(document_id)
+        if not document or document.user_id != user_id:
+            raise ValueError("Document not found or access denied")
+        record_task_started("analysis.generate")
+        start_time = time.perf_counter()
 
-        result = final["final_report"]
-        rag_service.cache.set_json(
-            analysis_cache_key(document_id),
-            result,
-            ttl=ANALYSIS_CACHE_TTL,
-            layer="analysis",
-        )
-        duration = time.perf_counter() - start_time
-        record_task_completed("analysis.generate", duration)
-        _check_sla("analysis.generate", duration)
-        return result
-    except Exception as exc:
-        duration = time.perf_counter() - start_time
-        record_task_failed("analysis.generate", duration, str(exc))
-        _check_sla("analysis.generate", duration, success=False)
-        raise
+        rag_service = get_rag_service()
+        openai_client = get_openai_client()
+
+        planner = make_generate_sub_queries(openai_client)
+        retriever = make_retrieve_all_contexts(rag_service)
+        analyze_fn = make_analyze_dimension(openai_client)
+        analyzers = make_dimension_analyzers(analyze_fn)
+        synthesizer = make_synthesize_final_report(openai_client)
+
+        state: AnalysisState = {
+            "document_id": document_id,
+            "user_id": user_id,
+            "dimensions": list(DEFAULT_DIMENSIONS),
+            "sub_queries": {},
+            "retrieved_contexts": {},
+            "analysis_results": {},
+        }
+
+        try:
+            loop = asyncio.get_running_loop()
+            
+            # Planner
+            plan_update = await loop.run_in_executor(None, planner, state)
+            state.update(plan_update)
+            
+            # Retriever
+            retrieve_update = await loop.run_in_executor(None, retriever, state)
+            state.update(retrieve_update)
+            
+            # Analyzers
+            for key in ["analyze_tech", "analyze_econ", "analyze_team", "analyze_risk"]:
+                result = await loop.run_in_executor(None, analyzers[key], state)
+                state.update(result)
+                
+            # Synthesizer
+            final = await loop.run_in_executor(None, synthesizer, state)
+            
+            if not final or "final_report" not in final:
+                raise RuntimeError("Failed to synthesize analysis report")
+
+            result = final["final_report"]
+            rag_service.cache.set_json(
+                analysis_cache_key(document_id),
+                result,
+                ttl=ANALYSIS_CACHE_TTL,
+                layer="analysis",
+            )
+            duration = time.perf_counter() - start_time
+            record_task_completed("analysis.generate", duration)
+            _check_sla("analysis.generate", duration)
+            return result
+        except Exception as exc:
+            duration = time.perf_counter() - start_time
+            record_task_failed("analysis.generate", duration, str(exc))
+            _check_sla("analysis.generate", duration, success=False)
+            raise
     finally:
+        await repo.session.close()
         clear_context()
 
 
@@ -285,6 +436,7 @@ def _dispatch_task(task_callable, task_name: str, priority: TaskPriority, *args,
 
 
 if celery_app:
+    import asyncio
 
     @celery_app.task(name="documents.parse", bind=True)
     def parse_document_task(
@@ -294,7 +446,15 @@ if celery_app:
         source_url: Optional[str] = None,
         sku: str = DEFAULT_PARSE_SKU,
     ) -> None:
-        _parse_document(document_id, user_id, source_url, sku=sku, task=self)
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+
+        if loop:
+            loop.create_task(_parse_document(document_id, user_id, source_url, sku=sku, task=self))
+        else:
+            asyncio.run(_parse_document(document_id, user_id, source_url, sku=sku, task=self))
 
     @celery_app.task(name="analysis.generate", bind=True)
     def generate_analysis_task(
@@ -306,7 +466,19 @@ if celery_app:
         _update_task_progress(self, 0, "开始分析")
         try:
             bind_task_context(getattr(self.request, "id", None))
-            report = _execute_analysis_workflow(document_id, user_id)
+            
+            try:
+                loop = asyncio.get_running_loop()
+            except RuntimeError:
+                loop = None
+
+            if loop:
+                # If we are in a loop (e.g. inline execution), we return the coroutine
+                # The caller (enqueue_generate_analysis) must await it
+                return _execute_analysis_workflow(document_id, user_id)
+            else:
+                report = asyncio.run(_execute_analysis_workflow(document_id, user_id))
+                
             _update_task_progress(self, 100, "分析完成")
             return report
         except Exception as exc:
@@ -315,6 +487,7 @@ if celery_app:
             raise
 
 else:
+    import asyncio
 
     def parse_document_task(
         document_id: str,
@@ -322,7 +495,15 @@ else:
         source_url: Optional[str] = None,
         sku: str = DEFAULT_PARSE_SKU,
     ) -> None:
-        _parse_document(document_id, user_id, source_url, sku=sku, task=None)
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+
+        if loop:
+            loop.create_task(_parse_document(document_id, user_id, source_url, sku=sku, task=None))
+        else:
+            asyncio.run(_parse_document(document_id, user_id, source_url, sku=sku, task=None))
 
     def generate_analysis_task(
         document_id: str,
@@ -330,7 +511,15 @@ else:
         sku: str = ANALYSIS_SKU,
     ) -> Dict:
         try:
-            return _execute_analysis_workflow(document_id, user_id)
+            try:
+                loop = asyncio.get_running_loop()
+            except RuntimeError:
+                loop = None
+            
+            if loop:
+                return _execute_analysis_workflow(document_id, user_id)
+            else:
+                return asyncio.run(_execute_analysis_workflow(document_id, user_id))
         except Exception as exc:
             _refund_on_failure(user_id, sku, str(exc))
             raise
@@ -356,7 +545,7 @@ def enqueue_parse_document(
     )
 
 
-def enqueue_generate_analysis(
+async def enqueue_generate_analysis(
     document_id: str,
     user_id: str,
     *,
@@ -374,5 +563,10 @@ def enqueue_generate_analysis(
             sku,
         )
         return None
-    return generate_analysis_task(document_id, user_id, sku)
+    
+    # Inline execution
+    result = generate_analysis_task(document_id, user_id, sku)
+    if asyncio.iscoroutine(result):
+        return await result
+    return result
 

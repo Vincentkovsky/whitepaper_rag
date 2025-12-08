@@ -1,22 +1,8 @@
-"""Workflow helpers for LangGraph-based analysis pipelines."""
+"""Workflow helpers for analysis pipelines.
 
-from .analysis_workflow import (
-    AnalysisState,
-    DEFAULT_DIMENSIONS,
-    make_analyze_dimension,
-    make_dimension_analyzers,
-    make_generate_sub_queries,
-    make_retrieve_all_contexts,
-    make_synthesize_final_report,
-)
+Note: The blockchain-specific analysis_workflow module has been removed
+as part of the migration to a generic Agentic RAG system.
+See .kiro/specs/generic-agentic-rag/ for the new architecture.
+"""
 
-__all__ = [
-    "AnalysisState",
-    "DEFAULT_DIMENSIONS",
-    "make_generate_sub_queries",
-    "make_retrieve_all_contexts",
-    "make_analyze_dimension",
-    "make_dimension_analyzers",
-    "make_synthesize_final_report",
-]
-
+__all__: list[str] = []

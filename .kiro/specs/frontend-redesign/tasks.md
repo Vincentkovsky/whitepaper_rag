@@ -1,0 +1,286 @@
+# Implementation Plan
+
+- [x] 1. 项目初始化与基础架构
+  - [x] 1.1 创建 Vite + React + TypeScript 项目
+    - 使用 `npm create vite@latest frontend -- --template react-ts`
+    - 配置 TypeScript strict mode
+    - 配置路径别名 `@/`
+    - _Requirements: 7.1_
+  - [x] 1.2 安装核心依赖
+    - 安装 zustand, react-router-dom, @supabase/supabase-js
+    - 安装 tailwindcss, postcss, autoprefixer
+    - 安装 fast-check, vitest, @testing-library/react
+    - _Requirements: 7.1_
+  - [x] 1.3 配置 TailwindCSS 和主题系统
+    - 配置 dark mode (class strategy)
+    - 定义设计 tokens (colors, spacing, typography)
+    - _Requirements: 5.4_
+  - [x] 1.4 创建目录结构
+    - 创建 components/, stores/, services/, utils/, pages/ 目录
+    - 创建 tests/properties/, tests/integration/ 目录
+    - _Requirements: 7.1_
+
+- [x] 2. 状态管理与数据模型
+  - [x] 2.1 实现数据模型类型定义
+    - 创建 types/chat.ts (Conversation, ChatMessage, Citation, ThoughtStep)
+    - 创建 types/document.ts (Document)
+    - 创建 types/auth.ts (User, AuthState)
+    - 创建 types/subscription.ts (Subscription)
+    - _Requirements: 7.1_
+  - [x] 2.2 实现 Auth Store
+    - 创建 stores/authStore.ts
+    - 实现 login, logout, refreshToken actions
+    - 实现 isAuthenticated computed
+    - _Requirements: 1.3, 1.4_
+  - [x] 2.3 编写 Auth Store 属性测试
+    - **Property 1: Authentication state consistency**
+    - **Validates: Requirements 1.3, 1.4**
+  - [x] 2.4 实现 Chat Store
+    - 创建 stores/chatStore.ts
+    - 实现 conversations, currentSession, messages state
+    - 实现 addMessage, appendToMessage, setFeedback actions
+    - _Requirements: 6.1, 6.3_
+  - [x] 2.5 编写 Chat Store 属性测试
+    - **Property 12: Message append preserves history**
+    - **Validates: Requirements 6.3**
+  - [x] 2.6 实现 Document Store
+    - 创建 stores/documentStore.ts
+    - 实现 documents, selectedDocument state
+    - 实现 uploadProgress 状态映射 (Map<fileId, progress>) 用于显示上传百分比
+    - 实现 CRUD actions
+    - _Requirements: 2.1, 2.3_
+  - [x] 2.7 实现 UI Store
+    - 创建 stores/uiStore.ts
+    - 实现 theme, isLoading, toasts state
+    - 实现 setTheme, showToast actions
+    - _Requirements: 5.2, 5.4_
+  - [x] 2.8 编写 Theme 属性测试
+    - **Property 10: Theme switching**
+    - **Validates: Requirements 5.4**
+
+- [x] 3. 服务层实现
+  - [x] 3.1 实现 API Client
+    - 创建 services/apiClient.ts
+    - 封装 fetch with auth headers
+    - 实现错误处理和重试逻辑
+    - _Requirements: 5.3_
+  - [x] 3.2 实现 Auth Service
+    - 创建 services/authService.ts
+    - 集成 Supabase Auth
+    - 实现 signInWithGoogle, signOut, getSession
+    - _Requirements: 1.2, 1.3, 1.4_
+  - [x] 3.3 实现 SSE Client
+    - 创建 services/sseClient.ts
+    - 实现 connect, abort 方法
+    - 实现事件解析 (thinking, tool_call, tool_result, answer, error)
+    - 实现自动重连 (exponential backoff)
+    - _Requirements: 3.2_
+  - [x] 3.4 编写 SSE 事件解析属性测试
+    - **Property 4: SSE event rendering**
+    - **Validates: Requirements 3.2, 3.3**
+  - [x] 3.5 实现 Storage Service
+    - 创建 services/storageService.ts
+    - 实现 saveConversations, loadConversations
+    - 实现 JSON 序列化/反序列化
+    - _Requirements: 6.4, 7.2, 7.3_
+  - [x] 3.6 编写 Storage 往返属性测试
+    - **Property 11: Conversation persistence round-trip**
+    - **Validates: Requirements 6.4, 7.2, 7.3**
+
+- [x] 4. Checkpoint - 确保所有测试通过
+  - Ensure all tests pass, ask the user if questions arise.
+
+- [x] 5. 认证模块
+  - [x] 5.1 实现 Login 页面
+    - 创建 pages/Login.tsx
+    - 实现 Google 登录按钮
+    - 处理 OAuth 回调
+    - _Requirements: 1.1, 1.2_
+  - [x] 5.2 实现 Auth Guard 组件
+    - 创建 components/AuthGuard.tsx
+    - 未认证时重定向到 /login
+    - 处理 token 刷新
+    - _Requirements: 1.1, 1.5_
+  - [x] 5.3 实现 User Menu 组件
+    - 创建 components/UserMenu.tsx
+    - 显示用户头像和名称
+    - 实现登出功能
+    - _Requirements: 1.4_
+
+- [x] 6. 文档管理模块
+  - [x] 6.1 实现 Document List 组件
+    - 创建 components/DocumentList.tsx
+    - 显示文档名称、状态、上传日期
+    - 实现状态轮询 (processing -> ready)
+    - _Requirements: 2.3, 2.4_
+  - [x] 6.2 编写 Document List 渲染属性测试
+    - **Property 2: Document list rendering completeness**
+    - **Validates: Requirements 2.3**
+  - [x] 6.3 实现 Document Upload 组件
+    - 创建 components/DocumentUpload.tsx
+    - 实现拖拽上传和点击上传
+    - 显示上传进度
+    - _Requirements: 2.1_
+  - [x] 6.4 实现 URL Submit 组件
+    - 创建 components/UrlSubmit.tsx
+    - 实现 URL 输入和提交
+    - _Requirements: 2.2_
+  - [x] 6.5 实现 Documents 页面
+    - 创建 pages/Documents.tsx
+    - 整合 DocumentList, DocumentUpload, UrlSubmit
+    - 实现删除确认对话框
+    - _Requirements: 2.5_
+  - [x] 6.6 编写错误显示属性测试
+    - **Property 3: Error message display**
+    - **Validates: Requirements 2.6, 3.7, 5.3**
+
+- [x] 7. Agent 对话核心模块
+  - [x] 7.1 实现 Citation Parser 工具函数
+    - 创建 utils/citationParser.ts
+    - 解析 [[citation:doc_id:chunk_id]] 格式
+    - 返回 Citation 对象数组
+    - _Requirements: 3.5_
+  - [x] 7.2 编写 Citation 解析属性测试
+    - **Property 5: Citation parsing and rendering**
+    - **Validates: Requirements 3.5**
+  - [x] 7.3 实现 Markdown Renderer 组件
+    - 创建 components/MarkdownRenderer.tsx
+    - 支持表格、代码块、LaTeX
+    - 集成 Citation Badge 渲染
+    - _Requirements: 3.6_
+  - [x] 7.4 编写 Markdown 渲染属性测试
+    - **Property 6: Markdown rendering**
+    - **Validates: Requirements 3.6**
+  - [x] 7.5 实现 Citation Badge 组件
+    - 创建 components/CitationBadge.tsx
+    - 可点击的引用徽章 [1], [2]
+    - 悬停显示预览
+    - _Requirements: 3.5_
+  - [x] 7.6 实现 Thought Process 组件
+    - 创建 components/ThoughtProcess.tsx
+    - 可折叠的思考步骤展示
+    - 脉冲动画指示器
+    - _Requirements: 3.3_
+  - [x] 7.7 实现 Status Indicator 组件
+    - 创建 components/StatusIndicator.tsx
+    - 显示 Agent 当前状态 (thinking, searching, etc.)
+    - 工具特定图标
+    - _Requirements: 9.1, 9.2, 9.3_
+  - [x] 7.8 编写 Status Indicator 属性测试
+    - **Property 15: Intent status indicator mapping**
+    - **Validates: Requirements 9.1, 9.2, 9.3**
+  - [x] 7.9 实现 Message Bubble 组件
+    - 创建 components/MessageBubble.tsx
+    - 用户消息和 Agent 消息样式
+    - 集成 MarkdownRenderer, ThoughtProcess
+    - 反馈按钮 (Thumbs Up/Down)
+    - _Requirements: 3.9_
+  - [x] 7.10 编写 Feedback 按钮属性测试
+    - **Property 7: Agent response feedback buttons**
+    - **Validates: Requirements 3.9**
+
+- [x] 8. Checkpoint - 确保所有测试通过
+  - Ensure all tests pass, ask the user if questions arise.
+
+- [x] 9. 证据看板模块
+  - [x] 9.1 实现 PDF Viewer 组件
+    - 创建 components/PDFViewer.tsx
+    - 集成 react-pdf-highlighter 或 pdfjs-dist (推荐 react-pdf-highlighter 简化高亮实现)
+    - 支持页面导航和缩放
+    - 支持文本高亮 (使用 textLayer 或 highlightCoords)
+    - _Requirements: 8.5_
+  - [x] 9.2 实现 Web Card 组件
+    - 创建 components/WebCard.tsx
+    - 显示 Web 搜索结果摘要
+    - 链接到原始 URL
+    - _Requirements: 8.6_
+  - [x] 9.3 编写 Source Type 组件选择属性测试
+    - **Property 14: Source type component selection**
+    - **Validates: Requirements 8.5, 8.6**
+  - [x] 9.4 实现 Evidence Board 组件
+    - 创建 components/EvidenceBoard.tsx
+    - 根据 sourceType 选择 PDFViewer 或 WebCard
+    - 实现滚动到指定页面
+    - 实现文本高亮
+    - _Requirements: 8.1, 8.2, 8.3, 8.4_
+  - [x] 9.5 编写 Citation Click 属性测试
+    - **Property 13: Citation click actions**
+    - **Validates: Requirements 8.2, 8.3, 8.4**
+
+- [x] 10. Chat Workbench 主页面
+  - [x] 10.1 实现 Chat Input 组件
+    - 创建 components/ChatInput.tsx
+    - 文本输入框 + 发送按钮
+    - 停止生成按钮
+    - 文档/知识库选择器
+    - _Requirements: 3.1, 3.8_
+  - [x] 10.2 实现 Chat History Sidebar 组件
+    - 创建 components/ChatHistorySidebar.tsx
+    - 显示会话列表
+    - 新建会话按钮
+    - _Requirements: 6.1, 6.2_
+  - [x] 10.3 实现 Chat Workbench 页面
+    - 创建 pages/ChatWorkbench.tsx
+    - 双屏布局: 左侧对话 + 右侧证据看板
+    - 移动端: 底部 Tab 切换
+    - 集成 SSE 流式响应
+    - _Requirements: 3.1, 3.2, 8.1, 8.7_
+  - [x] 10.4 实现 SSE 流式响应处理
+    - 在 ChatWorkbench 中处理 SSE 事件
+    - 实现 Throttle/Debounce 逻辑 (每 50-100ms 批量更新 UI，避免高频重渲染卡顿)
+    - 实时更新 ThoughtProcess
+    - 实时更新 StatusIndicator
+    - 处理 answer 事件完成对话
+    - _Requirements: 3.2, 3.3, 3.4_
+
+- [x] 11. 订阅管理模块
+  - [x] 11.1 实现 Subscription Page
+    - 创建 pages/Subscription.tsx
+    - 显示当前计划、功能、剩余积分
+    - 升级按钮
+    - _Requirements: 4.1, 4.2_
+  - [x] 11.2 编写 Subscription 显示属性测试
+    - **Property 8: Subscription display completeness**
+    - **Validates: Requirements 4.1**
+  - [x] 11.3 实现 Credits Insufficient Modal
+    - 创建 components/CreditsModal.tsx
+    - 显示积分不足提示
+    - 升级选项
+    - _Requirements: 4.3_
+  - [x] 11.4 实现 API Keys 管理组件
+    - 创建 components/ApiKeysManager.tsx
+    - 列表、创建、删除 API Keys
+    - _Requirements: 4.4_
+
+- [x] 12. 通用 UI 组件
+  - [x] 12.1 实现 Loading 组件
+    - 创建 components/Loading.tsx
+    - Skeleton loader 和 Spinner
+    - _Requirements: 5.2_
+  - [x] 12.2 编写 Loading 状态属性测试
+    - **Property 9: Loading state indicator**
+    - **Validates: Requirements 5.2**
+  - [x] 12.3 实现 Toast 组件
+    - 创建 components/Toast.tsx
+    - 成功、错误、警告样式
+    - 自动消失
+    - _Requirements: 5.3_
+  - [x] 12.4 实现 Layout 组件
+    - 创建 components/Layout.tsx
+    - 响应式导航栏
+    - 侧边栏 (桌面) / 底部导航 (移动)
+    - _Requirements: 5.1_
+
+- [x] 13. 路由与应用入口
+  - [x] 13.1 配置 React Router
+    - 创建 router.tsx
+    - 配置所有路由
+    - 实现 AuthGuard 保护
+    - _Requirements: 1.1_
+  - [x] 13.2 实现 App 入口
+    - 更新 App.tsx
+    - 集成 Router, Stores, Theme Provider
+    - _Requirements: 7.1_
+
+- [x] 14. Final Checkpoint - 确保所有测试通过
+  - Ensure all tests pass, ask the user if questions arise.

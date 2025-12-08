@@ -1,58 +1,87 @@
-# Blockchain Whitepaper RAG Analyzer
+# Prism 🌈
 
 **GitHub**: [https://github.com/Vincentkovsky/Prism](https://github.com/Vincentkovsky/Prism/tree/main)
 
-基于 RAG (Retrieval-Augmented Generation) 的区块链白皮书智能分析系统。
+![License](https://img.shields.io/badge/license-MIT-blue.svg)
+![Python](https://img.shields.io/badge/python-3.10+-blue.svg)
+![React](https://img.shields.io/badge/react-18.0+-61DAFB.svg)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.95+-009688.svg)
 
-## 功能特性
+**Prism** is an advanced AI-powered research assistant and RAG (Retrieval-Augmented Generation) platform. It combines a powerful **ReAct Agent** with document intelligence and real-time web search to provide accurate, cited, and reasoning-backed answers to complex queries.
 
-- 📄 **文档上传** - 支持 PDF 上传和 URL 抓取
-- 💬 **智能问答** - 基于文档内容的 RAG 问答
-- 📊 **深度分析** - 多维度白皮书分析报告
-- 🔐 **用户认证** - Supabase Auth 集成
-- 📈 **质量评估** - RAGAS 框架评估 RAG 效果
+---
 
-## 技术栈
+## ✨ Key Features
 
-**后端：** FastAPI + Celery + ChromaDB + OpenAI/Gemini  
-**前端：** Vue 3 + TypeScript + Element Plus  
-**数据库：** Supabase PostgreSQL + Redis  
-**AI：** LangGraph 工作流 + RAG Pipeline
+### 🧠 Intelligent Agentic Workflow
+- **ReAct Architecture**: Utilizes a custom-built Reason+Act loop to break down complex questions into sub-tasks (Thought → Action → Observation).
+- **Tool Use**: Autonomous dynamic tool selection between **Document Search** (internal knowledge) and **Web Search** (real-time internet data).
+- **Streaming Thoughts**: Visualizes the agent's "thinking process" in real-time via Server-Sent Events (SSE).
 
-## 快速开始
+### 📚 RAG & Document Intelligence
+- **PDF Ingestion**: Upload and parse technical documents, whitepapers, and reports.
+- **True Hybrid Search**: Combines **Vector Search** (ChromaDB semantic embeddings) + **BM25** (keyword-based ranking) for maximum recall.
+- **Intelligent Reranking**: Section-aware algorithm that boosts core sections (Abstract, Introduction, Conclusion) and respects document structure.
+- **Context-Aware**: Intelligently blends retrieved context with LLM knowledge.
 
-### 1. 环境准备
+### 🔍 Interactive Citations
+- **Source Transparency**: Every fact is backed by a verified source (Web or PDF).
+- **Rich Tooltips**: Hover over citations `[1]` to see the exact source title, URL, page number, and relevant text snippet.
+- **Click-to-Nav**: Direct links to external URLs or internal document viewers.
+
+### 🎨 Modern Frontend Experience
+- **Fluid UI**: Built with React, Tailwind CSS, and Framer Motion for smooth animations.
+- **Latex & Markdown**: Full support for rendering complex mathematical formulas ($E=mc^2$) and structured tables.
+- **Chat Management**: Persistent conversation history and session management.
+
+### 📄 Document Management
+- **Multi-format Upload**: Support for PDF documents with automatic parsing and indexing.
+- **Smart Organization**: Documents are automatically chunked and embedded for efficient retrieval.
+- **User Isolation**: Each user has their own document workspace with secure access controls.
+
+### 💳 Subscription & Admin
+- **Subscription Tiers**: Flexible subscription management for different user tiers.
+- **Admin Dashboard**: Comprehensive admin panel for user management and system monitoring.
+- **Usage Analytics**: Track API usage, document uploads, and query patterns.
+
+---
+
+## 🛠️ Technical Architecture
+
+### Backend Stack
+- **Framework**: FastAPI (Async Python)
+- **LLM Orchestration**: Custom Agent implementation (Lightweight, non-LangChain dependent core)
+- **Vector Store**: ChromaDB (Local persistence)
+- **Auth**: JWT / OAuth
+- **Task Queue**: Celery + Redis (for background document processing)
+
+### Frontend Stack
+- **Core**: React 18 + Vite
+- **Styling**: Tailwind CSS + Typography plugin
+- **State Management**: Zustand
+- **Streaming**: Native EventSource for SSE handling
+- **Markdown**: `react-markdown`, `remark-math`, `rehype-katex`
+
+---
+
+## 🚀 Getting Started
+
+### Prerequisites
+- Python 3.10+
+- Node.js 16+
+- Docker (optional, for Redis)
+- LLM API Key (OpenAI or Gemini)
+
+### 1. Environment Configuration
+Create a `.env` file in the root directory:
 
 ```bash
-# 克隆项目
-git clone <repo-url>
-cd blockchain_RAG
+# Core Config
+PROJECT_ROOT=/absolute/path/to/project
 
-# 创建虚拟环境
-python -m venv backend/venv
-source backend/venv/bin/activate
-
-# 安装依赖
-pip install -r backend/requirements.txt
-```
-
-### 2. 配置环境变量
-
-在项目根目录创建 `.env` 文件：
-
-```bash
-# Supabase
-VITE_SUPABASE_URL=your_supabase_project_url
-VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
-SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
-
-# LLM Provider (openai 或 gemini)
-LLM_PROVIDER=gemini
-EMBEDDING_PROVIDER=gemini
-
-# API Keys
+# LLM Providers
 OPENAI_API_KEY=sk-xxxx
-GEMINI_API_KEY=your_google_ai_studio_key
+GEMINI_API_KEY=your_key
 
 # Gemini 模型配置
 GEMINI_MODEL_PRO=gemini-2.5-pro
@@ -70,99 +99,126 @@ REDIS_URL=redis://localhost:6379/0
 source backend/venv/bin/activate
 python -m uvicorn backend.app.main:app --reload
 ```
+> **Note**: For background tasks like document indexing, ensure Redis is running (`brew install redis` or via Docker).
 
-**前端：**
+### 3. Frontend Setup
 ```bash
+# Navigate to frontend
 cd frontend
+
+# Install dependencies
 npm install
+
+# Start Dev Server
 npm run dev
 ```
 
-**Redis（可选，用于缓存）：**
-```bash
-# macOS
-brew services start redis
+---
 
-# Docker
-docker run -d -p 6379:6379 redis:7
-```
-
-## RAG 评估
-
-使用 RAGAS 框架评估 RAG 管道质量：
-
-```bash
-# 运行完整评估（30 个问题）
-python backend/evaluate_rag.py
-
-# 快速测试（5 个问题）
-python backend/evaluate_rag.py --sample 5
-
-# 跳过 ground truth 评估
-python backend/evaluate_rag.py --no-ground-truth
-```
-
-**评估指标：**
-| 指标 | 说明 | 目标值 |
-|------|------|--------|
-| Faithfulness | 答案是否忠于上下文 | > 80% |
-| Response Relevancy | 答案与问题的相关性 | > 80% |
-| Context Precision | 检索上下文的精准度 | > 70% |
-| Context Recall | 上下文覆盖率 | > 70% |
-
-## 项目结构
+## 📂 Project Structure
 
 ```
-blockchain_RAG/
+Prism/
 ├── backend/
 │   ├── app/
-│   │   ├── api/routes/      # API 路由
-│   │   ├── services/        # 业务逻辑
-│   │   │   ├── rag_service.py        # RAG 问答
-│   │   │   ├── chunking_service.py   # 文档分块
-│   │   │   ├── embedding_service.py  # 向量化
-│   │   │   └── evaluation_service.py # RAGAS 评估
-│   │   ├── tasks/           # Celery 任务
-│   │   └── workflows/       # LangGraph 工作流
-│   ├── evaluate_rag.py      # 评估脚本
-│   └── requirements.txt
+│   │   ├── agent/              # Agent Logic (ReAct loop, Tools, Prompts)
+│   │   ├── api/
+│   │   │   └── routes/         # API Endpoints
+│   │   │       ├── agent.py    # Chat streaming & agentic workflow
+│   │   │       ├── auth.py     # Authentication (login, register, OAuth)
+│   │   │       ├── documents.py # Document upload & management
+│   │   │       ├── qa.py       # Q&A endpoints
+│   │   │       ├── admin.py    # Admin panel APIs
+│   │   │       └── subscription.py # Subscription management
+│   │   ├── services/           # Core Services
+│   │   │   ├── rag_service.py  # RAG orchestration
+│   │   │   ├── llm_client.py   # LLM provider abstraction
+│   │   │   └── storage_service.py # File & vector storage
+│   │   └── tools/              # Agent Tools (Web Search, Doc Search)
+│   └── storage/                # ChromaDB + uploaded files
 ├── frontend/
-│   └── src/
-│       ├── components/      # Vue 组件
-│       └── api.ts           # API 客户端
-└── .env                     # 环境配置
+│   ├── src/
+│   │   ├── components/         # Reusable UI Components
+│   │   ├── pages/
+│   │   │   ├── ChatWorkbench.tsx  # Main chat interface
+│   │   │   ├── Documents.tsx      # Document library
+│   │   │   ├── Subscription.tsx   # Subscription management
+│   │   │   └── admin/             # Admin dashboard
+│   │   ├── services/           # API Clients & SSE Handler
+│   │   ├── stores/             # Zustand state management
+│   │   └── utils/              # Parsers (Citation, Markdown)
+└── README.md
 ```
 
-## 存储说明
+---
 
-### ChromaDB 持久化
+## 🔧 Development Notes
 
-默认使用持久化存储，embeddings 保存在 `backend/app/storage/chromadb/`。
+### Citation System
+- **Backend Format**: The agent generates citations as `[[citation:1]]`, `[[citation:2]]` etc.
+- **Frontend Parsing**: `citationParser.ts` extracts citations and replaces them with numbered badges `[1]` `[2]`.
+- **Metadata Lookup**: Citations are matched with source data (title, URL, snippet) via `documentId` key.
 
-**可选：使用远程 ChromaDB 服务器**
+### Streaming Architecture
+The `/chat/stream` endpoint uses Server-Sent Events (SSE) for real-time updates:
+
+```typescript
+// Event Types
+"thinking"     → Agent reasoning step (thought, action, observation)
+"tool_use"     → Tool execution (web_search, document_search)
+"answer"       → Final response with citations metadata
+"error"        → Error messages
+```
+
+### API Routes Overview
+
+| Route | Method | Description |
+|-------|--------|-------------|
+| `/api/auth/register` | POST | Create new user account |
+| `/api/auth/login` | POST | Login with email/password |
+| `/api/auth/google/login` | GET | OAuth2 login flow |
+| `/api/documents/upload` | POST | Upload PDF document |
+| `/api/documents` | GET | List user documents |
+| `/api/chat/stream` | POST | Streaming chat endpoint |
+| `/api/qa/ask` | POST | Non-streaming Q&A |
+| `/api/admin/users` | GET | Admin: list users |
+| `/api/subscription/status` | GET | Check subscription status |
+
+### Testing
+
 ```bash
-CHROMA_SERVER_HOST=localhost
-CHROMA_SERVER_PORT=8001
-CHROMA_SERVER_SSL=false
-CHROMA_SERVER_API_KEY=your_api_key
+# Frontend tests (React components, Markdown rendering)
+cd frontend && npm test
+
+# Backend tests (if configured)
+cd backend && pytest
 ```
 
-## API 文档
+---
 
-启动后端后访问：
-- Swagger UI: http://localhost:8000/docs
-- ReDoc: http://localhost:8000/redoc
+## 🚢 Deployment
 
-## 测试
+### Production Checklist
+- [ ] Set production environment variables (`OPENAI_API_KEY`, `REDIS_URL`)
+- [ ] Configure CORS allowed origins in `backend/app/main.py`
+- [ ] Set up persistent storage for ChromaDB (avoid ephemeral containers)
+- [ ] Enable SSL/TLS for API endpoints
+- [ ] Set up monitoring (error tracking, performance metrics)
 
-```bash
-# 运行所有测试
-pytest
+### Recommended Stack
+- **Backend**: Railway / Render / AWS Lambda
+- **Frontend**: Vercel / Netlify
+- **Database**: Managed PostgreSQL (if adding SQL features)
+- **Redis**: Redis Cloud / AWS ElastiCache
+- **Storage**: S3 / CloudFlare R2 (for uploaded documents)
 
-# 运行特定测试
-pytest backend/tests/test_rag_service.py -v
-```
+---
 
-## License
+## 🤝 Contributing
 
-MIT
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+---
+
+## 📄 License
+MIT © 2024 Prism Team

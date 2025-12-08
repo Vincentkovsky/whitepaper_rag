@@ -121,15 +121,21 @@ class StructuredChunker:
         # Clean PDF artifacts before parsing
         text = self._clean_pdf_artifacts(text)
         lines = text.splitlines()
-        return [
-            {
-                "category": "NarrativeText",
+        elements = []
+        for line in lines:
+            if not line.strip():
+                continue
+                
+            category = "NarrativeText"
+            if SECTION_HEADING_PATTERN.match(line):
+                category = "Title"
+                
+            elements.append({
+                "category": category,
                 "text": line,
                 "metadata": {},
-            }
-            for line in lines
-            if line.strip()
-        ]
+            })
+        return elements
 
     def _clean_pdf_artifacts(self, text: str) -> str:
         """Remove common PDF extraction artifacts like page numbers, headers/footers."""

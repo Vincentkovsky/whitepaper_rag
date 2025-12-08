@@ -81,25 +81,21 @@ PROJECT_ROOT=/absolute/path/to/project
 OPENAI_API_KEY=sk-xxxx
 GEMINI_API_KEY=your_key
 
-# Optional Infrastructure
+# Gemini 模型配置
+GEMINI_MODEL_PRO=gemini-2.5-pro
+GEMINI_MODEL_FLASH=gemini-2.5-flash
+GEMINI_EMBEDDING_MODEL=gemini-embedding-001
+
+# Redis (可选)
 REDIS_URL=redis://localhost:6379/0
-# CHROMA_PERSIST_DIRECTORY=backend/app/storage/chromadb
 ```
 
-### 2. Backend Setup
+### 3. 启动服务
+
+**后端：**
 ```bash
-# Navigate to backend
-cd backend
-
-# Create virtual env
-python -m venv venv
-source venv/bin/activate
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Start API Server
-uvicorn app.main:app --reload --port 8000
+source backend/venv/bin/activate
+python -m uvicorn backend.app.main:app --reload
 ```
 > **Note**: For background tasks like document indexing, ensure Redis is running (`brew install redis` or via Docker).
 

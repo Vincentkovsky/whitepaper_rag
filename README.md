@@ -1,86 +1,226 @@
-# whitepaper_rag
+# Prism 🌈
 
-激活venv环境
-source backend/venv/bin/activate
-安装依赖
-pip install -r backend/requirements.txt
-启动项目
-.venv/bin/python -m uvicorn backend.app.main:app --reload
+![License](https://img.shields.io/badge/license-MIT-blue.svg)
+![Python](https://img.shields.io/badge/python-3.10+-blue.svg)
+![React](https://img.shields.io/badge/react-18.0+-61DAFB.svg)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.95+-009688.svg)
 
-Celery: celery -A backend.app.celery_app worker --loglevel=info
+**Prism** is an advanced AI-powered research assistant and RAG (Retrieval-Augmented Generation) platform. It combines a powerful **ReAct Agent** with document intelligence and real-time web search to provide accurate, cited, and reasoning-backed answers to complex queries.
 
+---
 
-运行测试
-pytest
+## ✨ Key Features
 
-## 环境配置
+### 🧠 Intelligent Agentic Workflow
+- **ReAct Architecture**: Utilizes a custom-built Reason+Act loop to break down complex questions into sub-tasks (Thought → Action → Observation).
+- **Tool Use**: Autonomous dynamic tool selection between **Document Search** (internal knowledge) and **Web Search** (real-time internet data).
+- **Streaming Thoughts**: Visualizes the agent's "thinking process" in real-time via Server-Sent Events (SSE).
 
-### 1. 创建 `.env` 文件
+### 📚 RAG & Document Intelligence
+- **PDF Ingestion**: Upload and parse technical documents, whitepapers, and reports.
+- **True Hybrid Search**: Combines **Vector Search** (ChromaDB semantic embeddings) + **BM25** (keyword-based ranking) for maximum recall.
+- **Intelligent Reranking**: Section-aware algorithm that boosts core sections (Abstract, Introduction, Conclusion) and respects document structure.
+- **Context-Aware**: Intelligently blends retrieved context with LLM knowledge.
 
-在项目根目录创建 `.env`，同时供前后端读取：
+### 🔍 Interactive Citations
+- **Source Transparency**: Every fact is backed by a verified source (Web or PDF).
+- **Rich Tooltips**: Hover over citations `[1]` to see the exact source title, URL, page number, and relevant text snippet.
+- **Click-to-Nav**: Direct links to external URLs or internal document viewers.
+
+### 🎨 Modern Frontend Experience
+- **Fluid UI**: Built with React, Tailwind CSS, and Framer Motion for smooth animations.
+- **Latex & Markdown**: Full support for rendering complex mathematical formulas ($E=mc^2$) and structured tables.
+- **Chat Management**: Persistent conversation history and session management.
+
+### 📄 Document Management
+- **Multi-format Upload**: Support for PDF documents with automatic parsing and indexing.
+- **Smart Organization**: Documents are automatically chunked and embedded for efficient retrieval.
+- **User Isolation**: Each user has their own document workspace with secure access controls.
+
+### 💳 Subscription & Admin
+- **Subscription Tiers**: Flexible subscription management for different user tiers.
+- **Admin Dashboard**: Comprehensive admin panel for user management and system monitoring.
+- **Usage Analytics**: Track API usage, document uploads, and query patterns.
+
+---
+
+## 🛠️ Technical Architecture
+
+### Backend Stack
+- **Framework**: FastAPI (Async Python)
+- **LLM Orchestration**: Custom Agent implementation (Lightweight, non-LangChain dependent core)
+- **Vector Store**: ChromaDB (Local persistence)
+- **Auth**: JWT / OAuth
+- **Task Queue**: Celery + Redis (for background document processing)
+
+### Frontend Stack
+- **Core**: React 18 + Vite
+- **Styling**: Tailwind CSS + Typography plugin
+- **State Management**: Zustand
+- **Streaming**: Native EventSource for SSE handling
+- **Markdown**: `react-markdown`, `remark-math`, `rehype-katex`
+
+---
+
+## 🚀 Getting Started
+
+### Prerequisites
+- Python 3.10+
+- Node.js 16+
+- Docker (optional, for Redis)
+- LLM API Key (OpenAI or Gemini)
+
+### 1. Environment Configuration
+Create a `.env` file in the root directory:
+
 ```bash
-# Supabase (前后端共用)
-VITE_SUPABASE_URL=your_supabase_project_url
-VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
+# Core Config
+PROJECT_ROOT=/absolute/path/to/project
 
-# LLM API Keys
+# LLM Providers
 OPENAI_API_KEY=sk-xxxx
-GEMINI_API_KEY=your_google_ai_studio_key
+GEMINI_API_KEY=your_key
 
-# Redis (可选，用于缓存和 Celery)
+# Optional Infrastructure
 REDIS_URL=redis://localhost:6379/0
-
-# ChromaDB (可选，默认使用持久化存储)
-# CHROMA_PERSIST_DIRECTORY=backend/app/storage/chromadb  # 默认值
+# CHROMA_PERSIST_DIRECTORY=backend/app/storage/chromadb
 ```
 
-### 2. Supabase Auth 配置
-
-- 在 Supabase 控制台开启 Google Provider
-- 配置回调地址：
-  - 生产环境：`https://<project>.supabase.co/auth/v1/callback`
-  - 本地开发：`http://localhost:5173`
-
-### 3. 启动服务
-
-**后端：**
+### 2. Backend Setup
 ```bash
-source backend/venv/bin/activate
-pip install -r backend/requirements.txt
-python -m uvicorn backend.app.main:app --reload
+# Navigate to backend
+cd backend
+
+# Create virtual env
+python -m venv venv
+source venv/bin/activate
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Start API Server
+uvicorn app.main:app --reload --port 8000
 ```
+> **Note**: For background tasks like document indexing, ensure Redis is running (`brew install redis` or via Docker).
 
-**前端：**
+### 3. Frontend Setup
 ```bash
+# Navigate to frontend
 cd frontend
+
+# Install dependencies
 npm install
+
+# Start Dev Server
 npm run dev
 ```
 
-**Redis（可选，用于缓存）：**
-```bash
-# macOS
-brew services start redis
+---
 
-# Docker
-docker run -d -p 6379:6379 redis:7
+## 📂 Project Structure
+
+```
+Prism/
+├── backend/
+│   ├── app/
+│   │   ├── agent/              # Agent Logic (ReAct loop, Tools, Prompts)
+│   │   ├── api/
+│   │   │   └── routes/         # API Endpoints
+│   │   │       ├── agent.py    # Chat streaming & agentic workflow
+│   │   │       ├── auth.py     # Authentication (login, register, OAuth)
+│   │   │       ├── documents.py # Document upload & management
+│   │   │       ├── qa.py       # Q&A endpoints
+│   │   │       ├── admin.py    # Admin panel APIs
+│   │   │       └── subscription.py # Subscription management
+│   │   ├── services/           # Core Services
+│   │   │   ├── rag_service.py  # RAG orchestration
+│   │   │   ├── llm_client.py   # LLM provider abstraction
+│   │   │   └── storage_service.py # File & vector storage
+│   │   └── tools/              # Agent Tools (Web Search, Doc Search)
+│   └── storage/                # ChromaDB + uploaded files
+├── frontend/
+│   ├── src/
+│   │   ├── components/         # Reusable UI Components
+│   │   ├── pages/
+│   │   │   ├── ChatWorkbench.tsx  # Main chat interface
+│   │   │   ├── Documents.tsx      # Document library
+│   │   │   ├── Subscription.tsx   # Subscription management
+│   │   │   └── admin/             # Admin dashboard
+│   │   ├── services/           # API Clients & SSE Handler
+│   │   ├── stores/             # Zustand state management
+│   │   └── utils/              # Parsers (Citation, Markdown)
+└── README.md
 ```
 
-## 存储说明
+---
 
-### ChromaDB 持久化
+## 🔧 Development Notes
 
-默认使用 **持久化存储**，embeddings 保存在 `backend/app/storage/chromadb/`，后端重启后数据不会丢失。
+### Citation System
+- **Backend Format**: The agent generates citations as `[[citation:1]]`, `[[citation:2]]` etc.
+- **Frontend Parsing**: `citationParser.ts` extracts citations and replaces them with numbered badges `[1]` `[2]`.
+- **Metadata Lookup**: Citations are matched with source data (title, URL, snippet) via `documentId` key.
 
-**优点：**
-- ✅ 数据持久化，重启不丢失
-- ✅ 可以使用外部脚本调试（如 `python backend/debug.py`）
-- ✅ 适合生产环境
+### Streaming Architecture
+The `/chat/stream` endpoint uses Server-Sent Events (SSE) for real-time updates:
 
-**可选配置（使用远程 ChromaDB 服务器）：**
-```bash
-CHROMA_SERVER_HOST=localhost
-CHROMA_SERVER_PORT=8001
-CHROMA_SERVER_SSL=false
-CHROMA_SERVER_API_KEY=your_api_key  # 可选
+```typescript
+// Event Types
+"thinking"     → Agent reasoning step (thought, action, observation)
+"tool_use"     → Tool execution (web_search, document_search)
+"answer"       → Final response with citations metadata
+"error"        → Error messages
 ```
+
+### API Routes Overview
+
+| Route | Method | Description |
+|-------|--------|-------------|
+| `/api/auth/register` | POST | Create new user account |
+| `/api/auth/login` | POST | Login with email/password |
+| `/api/auth/google/login` | GET | OAuth2 login flow |
+| `/api/documents/upload` | POST | Upload PDF document |
+| `/api/documents` | GET | List user documents |
+| `/api/chat/stream` | POST | Streaming chat endpoint |
+| `/api/qa/ask` | POST | Non-streaming Q&A |
+| `/api/admin/users` | GET | Admin: list users |
+| `/api/subscription/status` | GET | Check subscription status |
+
+### Testing
+
+```bash
+# Frontend tests (React components, Markdown rendering)
+cd frontend && npm test
+
+# Backend tests (if configured)
+cd backend && pytest
+```
+
+---
+
+## 🚢 Deployment
+
+### Production Checklist
+- [ ] Set production environment variables (`OPENAI_API_KEY`, `REDIS_URL`)
+- [ ] Configure CORS allowed origins in `backend/app/main.py`
+- [ ] Set up persistent storage for ChromaDB (avoid ephemeral containers)
+- [ ] Enable SSL/TLS for API endpoints
+- [ ] Set up monitoring (error tracking, performance metrics)
+
+### Recommended Stack
+- **Backend**: Railway / Render / AWS Lambda
+- **Frontend**: Vercel / Netlify
+- **Database**: Managed PostgreSQL (if adding SQL features)
+- **Redis**: Redis Cloud / AWS ElastiCache
+- **Storage**: S3 / CloudFlare R2 (for uploaded documents)
+
+---
+
+## 🤝 Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+---
+
+## 📄 License
+MIT © 2024 Prism Team

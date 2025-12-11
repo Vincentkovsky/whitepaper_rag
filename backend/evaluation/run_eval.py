@@ -23,6 +23,13 @@ from app.services.evaluation_service import RAGEvaluationService, EvaluationSamp
 DOCUMENT_ID = "bbb5448f-cb96-40a5-8791-256e3d27dedb"
 USER_ID = "736d7b5d-96f2-4c9e-96bd-b56a403b1c45"
 
+
+#for plain RAG
+
+
+DOCUMENT_ID = "1a248384-73e8-432b-b1a8-33c4dcb4db17"
+USER_ID = "99d0b344-1647-465c-9663-25e9207c69f4"
+
 def load_dataset(path: str):
     """Load QA pairs from JSON file."""
     try:

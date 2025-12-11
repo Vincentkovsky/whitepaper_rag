@@ -23,12 +23,15 @@ def create_document_search_tool(rag_service: RAGService) -> Tool:
     Returns:
         A Tool instance configured for document search
     """
+    from ..core.config import get_settings
+    settings = get_settings()
+    default_k = settings.retrieval_top_k
     
     def document_search(
         query: str,
         user_id: str,
         document_id: Optional[str] = None,
-        k: int = 10,
+        k: int = None,
     ) -> List[Dict[str, Any]]:
         """Search for relevant chunks in documents.
         
@@ -36,11 +39,13 @@ def create_document_search_tool(rag_service: RAGService) -> Tool:
             query: The search query
             user_id: ID of the user making the request
             document_id: ID of the document to search (optional, searches all user documents if not provided)
-            k: Number of results to return (default: 10)
+            k: Number of results to return (uses config default if not specified)
             
         Returns:
             List of relevant chunks with text and metadata
         """
+        if k is None:
+            k = default_k
         logger.debug(
             f"Document search: query='{query[:50]}...', "
             f"document_id={document_id or 'all'}, user_id={user_id}, k={k}"
@@ -97,8 +102,8 @@ def create_document_search_tool(rag_service: RAGService) -> Tool:
                 },
                 "k": {
                     "type": "integer",
-                    "description": "Number of results to return (default: 10)",
-                    "default": 10,
+                    "description": f"Number of results to return (default: {default_k})",
+                    "default": default_k,
                 },
             },
         },

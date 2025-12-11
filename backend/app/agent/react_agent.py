@@ -30,7 +30,20 @@ try:
     from google.genai import types as genai_types  # type: ignore
 except ImportError:  # pragma: no cover
     genai = None
+    genai = None
     genai_types = None  # type: ignore
+
+# Add tenacity for smart retries
+try:
+    from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type, before_sleep_log
+    from google.genai.errors import ClientError
+except ImportError:
+    retry = lambda *args, **kwargs: lambda f: f
+    stop_after_attempt = lambda x: x
+    wait_exponential = lambda *args, **kwargs: x
+    retry_if_exception_type = lambda x: x
+    before_sleep_log = lambda logger, level: lambda f: f
+    ClientError = Exception
 
 from .types import (
     AgentResponse,
@@ -217,14 +230,20 @@ class ReActAgent:
                     except json.JSONDecodeError:
                         pass
                 
-                # Add observation to conversation history
+                # Add observation to conversation history with a stronger prompt
                 conversation_history.append({
                     "role": "assistant",
                     "content": llm_response,
                 })
                 conversation_history.append({
                     "role": "user",
-                    "content": f"Observation: {observation}",
+                    "content": f"""Observation: {observation}
+
+Based on this observation, you MUST now either:
+1. Call another tool if you need more information, OR
+2. Provide your final_answer if you have enough information to answer the question.
+
+Respond with JSON including "final_answer" if you're ready to answer, or "action" if you need to use another tool.""",
                 })
             else:
                 # No action and no final answer - ask LLM to continue
@@ -411,14 +430,20 @@ class ReActAgent:
                     except (json.JSONDecodeError, TypeError):
                         pass
                 
-                # Update conversation history
+                # Update conversation history with a stronger prompt
                 conversation_history.append({
                     "role": "assistant",
                     "content": llm_response,
                 })
                 conversation_history.append({
                     "role": "user",
-                    "content": f"Observation: {observation}",
+                    "content": f"""Observation: {observation}
+
+Based on this observation, you MUST now either:
+1. Call another tool if you need more information, OR
+2. Provide your final_answer if you have enough information to answer the question.
+
+Respond with JSON including "final_answer" if you're ready to answer, or "action" if you need to use another tool.""",
                 })
             else:
                 conversation_history.append({
@@ -529,6 +554,13 @@ Think step by step and decide what to do."""
         )
         return response.choices[0].message.content or ""
     
+    @retry(
+        retry=retry_if_exception_type(ClientError),
+        wait=wait_exponential(multiplier=2, min=4, max=60),  # Start at 4s, double up to 60s
+        stop=stop_after_attempt(5),
+        before_sleep=before_sleep_log(logger, logging.WARNING),
+        reraise=True
+    )
     def _call_gemini(self, messages: List[Dict[str, str]]) -> str:
         """Call Gemini API."""
         # Convert messages to Gemini format
@@ -553,8 +585,11 @@ Think step by step and decide what to do."""
             role = "user" if msg["role"] == "user" else "model"
             contents.append({"role": role, "parts": [{"text": msg["content"]}]})
         
+        model_name = self.settings.gemini_model_flash
+        logger.info(f"Calling Gemini LLM with model: {model_name}")
+
         response = self._gemini_client.models.generate_content(
-            model=self.settings.gemini_model_flash,
+            model=model_name,
             contents=contents,
             config=genai_types.GenerateContentConfig(
                 temperature=0.3,
@@ -600,7 +635,41 @@ Think step by step and decide what to do."""
                 except json.JSONDecodeError:
                     pass
             
-            # If we can't parse JSON, treat the whole response as a thought
+            # TOLERANT PARSING: If JSON parsing fails, check if it looks like a direct answer
+            # Indicators that this is an answer rather than ongoing reasoning:
+            # - Contains citations like [[citation:N]]
+            # - Starts with "The", "Based on", or other conclusive phrases
+            # - Contains definitive statements (is, are, was, were + value)
+            answer_indicators = [
+                "[[citation:",  # Has citations
+                "is $",         # Price statements
+                "are $",
+                "was $", 
+                "were $",
+                "is approximately",
+                "is around",
+                "per share",
+                "according to",
+                "based on the",
+                "the answer is",
+                "in summary",
+                "in conclusion",
+            ]
+            
+            response_lower = response.lower()
+            looks_like_answer = any(indicator in response_lower for indicator in answer_indicators)
+            
+            if looks_like_answer:
+                # Treat as final answer - LLM forgot to wrap in JSON but gave a valid response
+                logger.info(f"Treating non-JSON response as direct final answer: {response[:100]}...")
+                return {
+                    "thought": "Found the answer based on retrieved information.",
+                    "action": None,
+                    "action_input": None,
+                    "final_answer": response.strip(),
+                }
+            
+            # Otherwise, treat as thought and let the loop continue
             logger.warning(f"Failed to parse LLM response as JSON: {response[:200]}")
             return {
                 "thought": response,

@@ -254,7 +254,7 @@ export const Layout: React.FC = () => {
                 <header className="md:hidden flex items-center justify-between h-14 px-4 border-b border-[var(--border-color)] bg-[var(--bg-secondary)]">
                     <div className="flex items-center">
                         <img src="/logo.png" alt="Kiro Logo" className="w-6 h-6 mr-2" />
-                        <span className="font-bold text-[var(--text-primary)]">Kiro</span>
+                        <span className="font-bold text-[var(--text-primary)]">Prism</span>
                     </div>
                 </header>
 

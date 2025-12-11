@@ -294,8 +294,11 @@ class IntentRouter:
         
         full_prompt = f"{system_prompt}\n\n{user_prompt}"
         
+        model_name = self.settings.gemini_model_flash
+        self.logger.info(f"Classifying intent with Gemini model: {model_name}")
+
         response = self._gemini_client.models.generate_content(
-            model=self.settings.gemini_model_flash,
+            model=model_name,
             contents=full_prompt,
             config=genai_types.GenerateContentConfig(
                 temperature=0.1,

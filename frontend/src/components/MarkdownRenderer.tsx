@@ -146,8 +146,9 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
   const { processedContent, citations } = useMemo(() => {
     // Pre-process content to escape dollar signs used for currency (e.g., $100)
     // to prevent remark-math from interpreting them as LaTeX delimiters.
-    // We only escape $ if it's followed by a digit.
-    const escapedContent = content.replace(/\$(\d)/g, '\\$$1');
+    // Replace $ followed by a digit with a Unicode escaped version that won't be parsed as LaTeX
+    // We use &#36; (HTML entity for $) which will render correctly but won't trigger LaTeX
+    const escapedContent = content.replace(/\$(\d)/g, '&#36;$1');
 
     const result = parseCitations(escapedContent);
     return {

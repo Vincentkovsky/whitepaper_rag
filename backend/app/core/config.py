@@ -46,6 +46,10 @@ class Settings(BaseSettings):
     openai_model_mini: str = "gpt-4o-mini"
     openai_model_turbo: str = "gpt-4-turbo"
     gemini_model_flash: str = "gemini-2.5-flash"
+
+    # gemini_model_flash: str = "gemini-2.0-flash"
+
+
     gemini_model_pro: str = "gemini-2.5-pro"
     gemini_embedding_model: str = "text-embedding-004"
     embedding_provider: str = "openai"
@@ -73,6 +77,7 @@ class Settings(BaseSettings):
     bm25_weight: float = 0.3  # Weight for BM25 search in hybrid retrieval
     agent_max_steps: int = 10  # Maximum reasoning steps for agent
     router_confidence_threshold: float = 0.8  # Confidence threshold for intent classification
+    retrieval_top_k: int = 5  # Number of chunks to retrieve for document search
     tavily_api_key: Optional[str] = None  # API key for Tavily web search
     serpapi_key: Optional[str] = None  # API key for SerpApi web search
 

@@ -10,6 +10,7 @@ interface ChatState {
   conversations: Conversation[];
   currentSessionId: string | null;
   agentStatus: AgentStatus;
+  selectedModel: 'mini' | 'turbo';
 }
 
 interface ChatActions {
@@ -27,7 +28,11 @@ interface ChatActions {
 
   // Status actions
   setAgentStatus: (status: AgentStatus) => void;
+
+  // Model actions
+  setSelectedModel: (model: 'mini' | 'turbo') => void;
 }
+
 
 interface ChatStore extends ChatState, ChatActions {
   currentConversation: Conversation | null;
@@ -39,6 +44,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   conversations: [],
   currentSessionId: null,
   agentStatus: 'idle',
+  selectedModel: 'mini',
 
   // Computed
   get currentConversation() {
@@ -88,10 +94,10 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       conversations: state.conversations.map(c =>
         c.id === conversationId
           ? {
-              ...c,
-              messages: [...c.messages, message],
-              updatedAt: new Date().toISOString(),
-            }
+            ...c,
+            messages: [...c.messages, message],
+            updatedAt: new Date().toISOString(),
+          }
           : c
       ),
     }));
@@ -102,12 +108,12 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       conversations: state.conversations.map(c =>
         c.id === conversationId
           ? {
-              ...c,
-              messages: c.messages.map(m =>
-                m.id === messageId ? { ...m, content: m.content + content } : m
-              ),
-              updatedAt: new Date().toISOString(),
-            }
+            ...c,
+            messages: c.messages.map(m =>
+              m.id === messageId ? { ...m, content: m.content + content } : m
+            ),
+            updatedAt: new Date().toISOString(),
+          }
           : c
       ),
     }));
@@ -118,11 +124,11 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       conversations: state.conversations.map(c =>
         c.id === conversationId
           ? {
-              ...c,
-              messages: c.messages.map(m =>
-                m.id === messageId ? { ...m, feedback } : m
-              ),
-            }
+            ...c,
+            messages: c.messages.map(m =>
+              m.id === messageId ? { ...m, feedback } : m
+            ),
+          }
           : c
       ),
     }));
@@ -131,5 +137,10 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   // Status actions
   setAgentStatus: (status: AgentStatus) => {
     set({ agentStatus: status });
+  },
+
+  // Model actions
+  setSelectedModel: (model: 'mini' | 'turbo') => {
+    set({ selectedModel: model });
   },
 }));

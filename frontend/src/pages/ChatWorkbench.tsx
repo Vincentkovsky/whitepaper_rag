@@ -105,6 +105,8 @@ export function ChatWorkbench() {
     addMessage,
     setFeedback,
     setAgentStatus,
+    selectedModel,
+    setSelectedModel,
   } = useChatStore();
 
   const { setDocuments } = useDocumentStore();
@@ -422,7 +424,7 @@ export function ChatWorkbench() {
         `${apiClient.getBaseUrl()}/agent/chat/stream`,
         {
           question: message,
-          model: 'mini',
+          model: selectedModel,
         },
         sseOptions
       );
@@ -484,6 +486,28 @@ export function ChatWorkbench() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                 </svg>
               </button>
+
+              {/* Model Toggle */}
+              <div className="flex items-center bg-gray-100 dark:bg-gray-800 rounded-lg p-1 mr-2">
+                <button
+                  onClick={() => setSelectedModel('mini')}
+                  className={`px-3 py-1 text-xs font-medium rounded-md transition-all ${selectedModel === 'mini'
+                    ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm'
+                    : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+                    }`}
+                >
+                  Flash
+                </button>
+                <button
+                  onClick={() => setSelectedModel('turbo')}
+                  className={`px-3 py-1 text-xs font-medium rounded-md transition-all ${selectedModel === 'turbo'
+                    ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm'
+                    : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+                    }`}
+                >
+                  Pro
+                </button>
+              </div>
 
               {/* Status Indicator */}
               {agentStatus !== 'idle' && (

@@ -274,6 +274,88 @@ class RAGEvaluationService:
         result.answer_model = answer_model
         return result
 
+    def evaluate_from_agent(
+        self,
+        user_id: str,
+        test_questions: List[str],
+        ground_truths: Optional[List[str]] = None,
+    ) -> EvaluationResult:
+        """
+        Evaluate Agent with test questions.
+        
+        Uses ReActAgent for multi-step reasoning and tool calling.
+        Extracts contexts from AgentResponse.sources for RAGAS evaluation.
+        
+        Note: Agent searches across ALL user documents, no document_id needed.
+        
+        Args:
+            user_id: User ID for access control
+            test_questions: List of test questions
+            ground_truths: Optional list of expected answers
+        
+        Returns:
+            EvaluationResult
+        """
+        from ..agent.react_agent import ReActAgent
+        from .agent_service import AgentService
+        import asyncio
+        
+        # Use AgentService which properly initializes all tools
+        agent_service = AgentService()
+        samples = []
+        answer_model = "unknown"
+        
+        for i, question in enumerate(test_questions):
+            print(f"[{i+1}/{len(test_questions)}] Q: {question[:50]}...")
+            
+            try:
+                # agent_service.chat() is async
+                response = asyncio.get_event_loop().run_until_complete(
+                    agent_service.chat(
+                        query=question,
+                        user_id=user_id,
+                    )
+                )
+                
+                # Extract contexts from sources
+                contexts = []
+                for source in response.sources:
+                    if isinstance(source, dict) and "text" in source:
+                        contexts.append(source["text"])
+                    elif isinstance(source, str):
+                        contexts.append(source)
+                
+                answer_model = response.model_used
+                
+                sample = EvaluationSample(
+                    question=question,
+                    answer=response.answer,
+                    contexts=contexts,
+                    ground_truth=ground_truths[i] if ground_truths and i < len(ground_truths) else None,
+                )
+                samples.append(sample)
+                
+                print(f"  ✓ Answer: {response.answer[:60]}...")
+                print(f"  📚 Sources: {len(contexts)} chunks")
+                
+            except Exception as e:
+                self.logger.error(f"Agent evaluation failed for question: {question[:50]}...: {e}")
+                print(f"  ❌ Error: {e}")
+                # Add empty sample to maintain alignment with ground_truths
+                samples.append(EvaluationSample(
+                    question=question,
+                    answer=f"Error: {str(e)}",
+                    contexts=[],
+                    ground_truth=ground_truths[i] if ground_truths and i < len(ground_truths) else None,
+                ))
+        
+        result = self.evaluate_samples(
+            samples=samples,
+            include_ground_truth=bool(ground_truths),
+        )
+        result.answer_model = answer_model
+        return result
+
     def save_results(self, result: EvaluationResult, output_path: Path) -> None:
         """Save evaluation results to JSON file."""
         output_path.parent.mkdir(parents=True, exist_ok=True)

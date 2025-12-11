@@ -36,6 +36,18 @@ try:
 except ImportError:  # pragma: no cover
     pdfplumber = None  # type: ignore
 
+# Add tenacity for smart retries
+try:
+    from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type, before_sleep_log
+    from google.genai.errors import ClientError
+except ImportError:
+    retry = lambda *args, **kwargs: lambda f: f
+    stop_after_attempt = lambda x: x
+    wait_exponential = lambda *args, **kwargs: x
+    retry_if_exception_type = lambda x: x
+    before_sleep_log = lambda logger, level: lambda f: f
+    ClientError = Exception
+
 try:
     from pdf2image import convert_from_path
     from PIL import Image
@@ -238,6 +250,9 @@ class StructuredChunker:
             # Send to Gemini for extraction
             markdown = self._extract_table_with_gemini(gemini_client, cropped, settings.gemini_model_flash)
             
+            # Rate limiting: Sleep to avoid 429 RESOURCE_EXHAUSTED
+            time.sleep(2)
+            
             if markdown:
                 key = (page_num, len([k for k in tables_extracted if k[0] == page_num]))
                 tables_extracted[key] = markdown
@@ -271,6 +286,13 @@ class StructuredChunker:
             logging.getLogger(__name__).debug(f"Failed to crop table: {e}")
             return page_image
     
+    @retry(
+        retry=retry_if_exception_type(ClientError),
+        wait=wait_exponential(multiplier=2, min=4, max=60),
+        stop=stop_after_attempt(5),
+        before_sleep=before_sleep_log(logging.getLogger(__name__), logging.WARNING),
+        reraise=True
+    )
     def _extract_table_with_gemini(self, client, image: "Image.Image", model: str) -> Optional[str]:
         """Use Gemini VLM to extract table as markdown."""
         try:
@@ -278,6 +300,8 @@ class StructuredChunker:
             img_buffer = io.BytesIO()
             image.save(img_buffer, format='PNG')
             img_bytes = img_buffer.getvalue()
+
+            logging.getLogger(__name__).info(f"Extracting table with VLM model: {model}")
             
             prompt = """请精准转录这张图片中的表格为 Markdown 格式。
 
